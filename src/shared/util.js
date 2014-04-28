@@ -952,6 +952,30 @@ var LegacyPromise = PDFJS.LegacyPromise = (function LegacyPromiseClosure() {
 })();
 
 /**
+ * Capability object typdef.
+ *
+ * @typedef {Object} Capability
+ * @property {Promise} promise - A promise object.
+ * @property {function} resolve - Fullfills the promise.
+ * @property {function} reject - Rejects the promise.
+ */
+
+/**
+ * Creates a promise capability object.
+ * @return {Capability} A capability object containing promise, resolve and reject methods.
+ */
+function PromiseCapability() {
+  var capability = {};
+  capability.promise = new Promise(function (resolve, reject) {
+    capability.resolve = resolve;
+    capability.reject = reject;
+  });
+  return capability;
+}
+
+PDFJS.PromiseCapability = PromiseCapability;
+
+/**
  * Polyfill for Promises:
  * The following promise implementation tries to generally implment the
  * Promise/A+ spec. Some notable differences from other promise libaries are:
@@ -990,6 +1014,11 @@ var LegacyPromise = PDFJS.LegacyPromise = (function LegacyPromiseClosure() {
     if (typeof globalScope.Promise.resolve !== 'function') {
       globalScope.Promise.resolve = function (x) {
         return new globalScope.Promise(function (resolve) { resolve(x); });
+      };
+    }
+    if (typeof globalScope.Promise.reject !== 'function') {
+      globalScope.Promise.reject = function (x) {
+        return new globalScope.Promise(function (resolve, reject) { reject(x); });
       };
     }
     return;
@@ -1179,6 +1208,14 @@ var LegacyPromise = PDFJS.LegacyPromise = (function LegacyPromiseClosure() {
    */
   Promise.resolve = function Promise_resolve(x) {
     return new Promise(function (resolve) { resolve(x); });
+  };
+  /**
+   * Creates rejected promise
+   * @param x reason value
+   * @returns {Promise}
+   */
+  Promise.reject = function Promise_reject(x) {
+    return new Promise(function (resolve, reject) { reject(x); });
   };
 
   Promise.prototype = {
