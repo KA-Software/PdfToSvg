@@ -1,10 +1,11 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
+/*jshint globalstrict: false */
 
 var TestReporter = function(browser, appPath) {
   'use strict';
 
-  function send(action, json) {
+  function send(action, json, cb) {
     var r = new XMLHttpRequest();
     // (The POST URI is ignored atm.)
     r.open('POST', action, true);
@@ -12,8 +13,13 @@ var TestReporter = function(browser, appPath) {
     r.onreadystatechange = function sendTaskResultOnreadystatechange(e) {
       if (r.readyState == 4) {
         // Retry until successful
-        if (r.status !== 200)
-          send(action, json);
+        if (r.status !== 200) {
+          send(action, json, cb);
+        } else {
+          if (cb) {
+            cb();
+          }
+        }
       }
     };
     json['browser'] = browser;
@@ -29,13 +35,18 @@ var TestReporter = function(browser, appPath) {
       status: status,
       description: description
     };
-    if (typeof error !== 'undefined')
+    if (typeof error !== 'undefined') {
       message['error'] = error;
+    }
     send('/submit_task_results', message);
   }
 
   function sendQuitRequest() {
-    send('/tellMeToQuit?path=' + escape(appPath), {});
+    send('/tellMeToQuit?path=' + escape(appPath), {}, function () {
+      if (window.SpecialPowers) {
+        SpecialPowers.quit();
+      }
+    });
   }
 
   this.now = function() {
@@ -58,9 +69,11 @@ var TestReporter = function(browser, appPath) {
     } else {
       var failedMessages = '';
       var items = results.getItems();
-      for (var i = 0, ii = items.length; i < ii; i++)
-        if (!items[i].passed())
+      for (var i = 0, ii = items.length; i < ii; i++) {
+        if (!items[i].passed()) {
           failedMessages += items[i].message + ' ';
+        }
+      }
       sendResult('TEST-UNEXPECTED-FAIL', results.description, failedMessages);
     }
   };

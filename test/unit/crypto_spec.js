@@ -9,8 +9,9 @@ describe('crypto', function() {
   function string2binary(s) {
     var n = s.length, i;
     var result = new Uint8Array(n);
-    for (i = 0; i < n; ++i)
+    for (i = 0; i < n; ++i) {
       result[i] = s.charCodeAt(i) % 0xFF;
+    }
     return result;
   }
 
@@ -198,7 +199,7 @@ describe('CipherTransformFactory', function() {
   };
 
   var map1 = {
-    Filter: new Name('Standard'),
+    Filter: Name.get('Standard'),
     V: 2,
     Length: 128,
     O: unescape('%80%C3%04%96%91o%20sl%3A%E6%1B%13T%91%F2%0DV%12%E3%FF%5E%BB%' +
@@ -211,7 +212,7 @@ describe('CipherTransformFactory', function() {
   var fileID1 = unescape('%F6%C6%AF%17%F3rR%8DRM%9A%80%D1%EF%DF%18');
 
   var map2 = {
-    Filter: new Name('Standard'),
+    Filter: Name.get('Standard'),
     V: 4,
     Length: 128,
     O: unescape('sF%14v.y5%27%DB%97%0A5%22%B3%E1%D4%AD%BD%9B%3C%B4%A5%89u%15%' +
@@ -226,19 +227,19 @@ describe('CipherTransformFactory', function() {
   describe('#ctor', function() {
     it('should accept user password', function() {
       var factory = new CipherTransformFactory(new DictMock(map1), fileID1,
-        '123456');
+                                               '123456');
     });
 
     it('should accept owner password', function() {
       var factory = new CipherTransformFactory(new DictMock(map1), fileID1,
-        '654321');
+                                               '654321');
     });
 
     it('should not accept wrong password', function() {
       var thrown = false;
       try {
         var factory = new CipherTransformFactory(new DictMock(map1), fileID1,
-          'wrong');
+                                                 'wrong');
       } catch (e) {
         thrown = true;
       }

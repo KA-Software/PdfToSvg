@@ -54,10 +54,19 @@ describe('api', function() {
         expect(true).toEqual(true);
       });
     });
+    it('gets page index', function() {
+      // reference to second page
+      var ref = {num: 17, gen: 0};
+      var promise = doc.getPageIndex(ref);
+      waitsForPromise(promise, function(pageIndex) {
+        expect(pageIndex).toEqual(1);
+      });
+    });
     it('gets destinations', function() {
       var promise = doc.getDestinations();
       waitsForPromise(promise, function(data) {
-        // TODO this seems to be broken for the test pdf
+        expect(data).toEqual({ chapter1: [{ gen: 0, num: 17 }, { name: 'XYZ' },
+                                          0, 841.89, null] });
       });
     });
     it('gets outline', function() {
@@ -76,6 +85,12 @@ describe('api', function() {
       waitsForPromise(promise, function(metadata) {
         expect(metadata.info['Title']).toEqual('Basic API Test');
         expect(metadata.metadata.get('dc:title')).toEqual('Basic API Test');
+      });
+    });
+    it('gets data', function() {
+      var promise = doc.getData();
+      waitsForPromise(promise, function (data) {
+        expect(true).toEqual(true);
       });
     });
   });

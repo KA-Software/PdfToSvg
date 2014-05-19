@@ -27,9 +27,11 @@ var PDFFunction = (function PDFFunctionClosure() {
   return {
     getSampleArray: function PDFFunction_getSampleArray(size, outputSize, bps,
                                                        str) {
+      var i, ii;
       var length = 1;
-      for (var i = 0, ii = size.length; i < ii; i++)
+      for (i = 0, ii = size.length; i < ii; i++) {
         length *= size[i];
+      }
       length *= outputSize;
 
       var array = [];
@@ -40,7 +42,7 @@ var PDFFunction = (function PDFFunctionClosure() {
 
       var strBytes = str.getBytes((length * bps + 7) / 8);
       var strIdx = 0;
-      for (var i = 0; i < length; i++) {
+      for (i = 0; i < length; i++) {
         while (codeSize < bps) {
           codeBuf <<= 8;
           codeBuf |= strBytes[strIdx++];
@@ -55,8 +57,9 @@ var PDFFunction = (function PDFFunctionClosure() {
 
     getIR: function PDFFunction_getIR(xref, fn) {
       var dict = fn.dict;
-      if (!dict)
+      if (!dict) {
         dict = fn;
+      }
 
       var types = [this.constructSampled,
                    null,
@@ -66,8 +69,9 @@ var PDFFunction = (function PDFFunctionClosure() {
 
       var typeNum = dict.get('FunctionType');
       var typeFn = types[typeNum];
-      if (!typeFn)
+      if (!typeFn) {
         error('Unknown type of function');
+      }
 
       return typeFn.call(this, fn, dict, xref);
     },
@@ -95,7 +99,6 @@ var PDFFunction = (function PDFFunctionClosure() {
     constructSampled: function PDFFunction_constructSampled(str, dict) {
       function toMultiArray(arr) {
         var inputLength = arr.length;
-        var outputLength = arr.length / 2;
         var out = [];
         var index = 0;
         for (var i = 0; i < inputLength; i += 2) {
@@ -107,8 +110,9 @@ var PDFFunction = (function PDFFunctionClosure() {
       var domain = dict.get('Domain');
       var range = dict.get('Range');
 
-      if (!domain || !range)
+      if (!domain || !range) {
         error('No domain or range');
+      }
 
       var inputSize = domain.length / 2;
       var outputSize = range.length / 2;
@@ -136,10 +140,11 @@ var PDFFunction = (function PDFFunctionClosure() {
       encode = toMultiArray(encode);
 
       var decode = dict.get('Decode');
-      if (!decode)
+      if (!decode) {
         decode = range;
-      else
+      } else {
         decode = toMultiArray(decode);
+      }
 
       var samples = this.getSampleArray(size, outputSize, bps, str);
 
@@ -164,12 +169,13 @@ var PDFFunction = (function PDFFunctionClosure() {
         var samples = IR[5];
         var size = IR[6];
         var n = IR[7];
-        var mask = IR[8];
+        //var mask = IR[8];
         var range = IR[9];
 
-        if (m != args.length)
+        if (m != args.length) {
           error('Incorrect number of arguments: ' + m + ' != ' +
                 args.length);
+        }
 
         var x = args;
 
@@ -178,12 +184,14 @@ var PDFFunction = (function PDFFunctionClosure() {
         var cubeVertices = 1 << m;
         var cubeN = new Float64Array(cubeVertices);
         var cubeVertex = new Uint32Array(cubeVertices);
-        for (var j = 0; j < cubeVertices; j++)
+        var i, j;
+        for (j = 0; j < cubeVertices; j++) {
           cubeN[j] = 1;
+        }
 
         var k = n, pos = 1;
         // Map x_i to y_j for 0 <= i < m using the sampled function.
-        for (var i = 0; i < m; ++i) {
+        for (i = 0; i < m; ++i) {
           // x_i' = min(max(x_i, Domain_2i), Domain_2i+1)
           var domain_2i = domain[i][0];
           var domain_2i_1 = domain[i][1];
@@ -204,7 +212,7 @@ var PDFFunction = (function PDFFunctionClosure() {
           var n1 = e - e0; // (e - e0) / (e1 - e0);
           var offset0 = e0 * k;
           var offset1 = offset0 + k; // e1 * k
-          for (var j = 0; j < cubeVertices; j++) {
+          for (j = 0; j < cubeVertices; j++) {
             if (j & pos) {
               cubeN[j] *= n1;
               cubeVertex[j] += offset1;
@@ -219,11 +227,12 @@ var PDFFunction = (function PDFFunctionClosure() {
         }
 
         var y = new Float64Array(n);
-        for (var j = 0; j < n; ++j) {
+        for (j = 0; j < n; ++j) {
           // Sum all cube vertices' samples portions
           var rj = 0;
-          for (var i = 0; i < cubeVertices; i++)
+          for (i = 0; i < cubeVertices; i++) {
             rj += samples[cubeVertex[i] + j] * cubeN[i];
+          }
 
           // r_j' = Interpolate(r_j, 0, 2^BitsPerSample - 1,
           //                    Decode_2j, Decode_2j+1)
@@ -243,13 +252,15 @@ var PDFFunction = (function PDFFunctionClosure() {
       var c1 = dict.get('C1') || [1];
       var n = dict.get('N');
 
-      if (!isArray(c0) || !isArray(c1))
+      if (!isArray(c0) || !isArray(c1)) {
         error('Illegal dictionary for interpolated function');
+      }
 
       var length = c0.length;
       var diff = [];
-      for (var i = 0; i < length; ++i)
+      for (var i = 0; i < length; ++i) {
         diff.push(c1[i] - c0[i]);
+      }
 
       return [CONSTRUCT_INTERPOLATED, c0, diff, n];
     },
@@ -266,8 +277,9 @@ var PDFFunction = (function PDFFunctionClosure() {
         var x = n == 1 ? args[0] : Math.pow(args[0], n);
 
         var out = [];
-        for (var j = 0; j < length; ++j)
+        for (var j = 0; j < length; ++j) {
           out.push(c0[j] + (x * diff[j]));
+        }
 
         return out;
 
@@ -277,17 +289,20 @@ var PDFFunction = (function PDFFunctionClosure() {
     constructStiched: function PDFFunction_constructStiched(fn, dict, xref) {
       var domain = dict.get('Domain');
 
-      if (!domain)
+      if (!domain) {
         error('No domain');
+      }
 
       var inputSize = domain.length / 2;
-      if (inputSize != 1)
+      if (inputSize != 1) {
         error('Bad domain for stiched function');
+      }
 
       var fnRefs = dict.get('Functions');
       var fns = [];
-      for (var i = 0, ii = fnRefs.length; i < ii; ++i)
+      for (var i = 0, ii = fnRefs.length; i < ii; ++i) {
         fns.push(PDFFunction.getIR(xref, xref.fetchIfRef(fnRefs[i])));
+      }
 
       var bounds = dict.get('Bounds');
       var encode = dict.get('Encode');
@@ -308,10 +323,11 @@ var PDFFunction = (function PDFFunctionClosure() {
 
       return function constructStichedFromIRResult(args) {
         var clip = function constructStichedFromIRClip(v, min, max) {
-          if (v > max)
+          if (v > max) {
             v = max;
-          else if (v < min)
+          } else if (v < min) {
             v = min;
+          }
           return v;
         };
 
@@ -319,24 +335,27 @@ var PDFFunction = (function PDFFunctionClosure() {
         var v = clip(args[0], domain[0], domain[1]);
         // calulate which bound the value is in
         for (var i = 0, ii = bounds.length; i < ii; ++i) {
-          if (v < bounds[i])
+          if (v < bounds[i]) {
             break;
+          }
         }
 
         // encode value into domain of function
         var dmin = domain[0];
-        if (i > 0)
+        if (i > 0) {
           dmin = bounds[i - 1];
+        }
         var dmax = domain[1];
-        if (i < bounds.length)
+        if (i < bounds.length) {
           dmax = bounds[i];
+        }
 
         var rmin = encode[2 * i];
         var rmax = encode[2 * i + 1];
 
         var v2 = rmin + (v - dmin) * (rmax - rmin) / (dmax - dmin);
 
-        // call the appropropriate function
+        // call the appropriate function
         return fns[i]([v2]);
       };
     },
@@ -346,11 +365,13 @@ var PDFFunction = (function PDFFunctionClosure() {
       var domain = dict.get('Domain');
       var range = dict.get('Range');
 
-      if (!domain)
+      if (!domain) {
         error('No domain.');
+      }
 
-      if (!range)
+      if (!range) {
         error('No range.');
+      }
 
       var lexer = new PostScriptLexer(fn);
       var parser = new PostScriptParser(lexer);
@@ -364,62 +385,55 @@ var PDFFunction = (function PDFFunctionClosure() {
       var domain = IR[1];
       var range = IR[2];
       var code = IR[3];
-      var numOutputs = range.length / 2;
+      var numOutputs = range.length >> 1;
+      var numInputs = domain.length >> 1;
       var evaluator = new PostScriptEvaluator(code);
       // Cache the values for a big speed up, the cache size is limited though
       // since the number of possible values can be huge from a PS function.
-      var cache = new FunctionCache();
+      var cache = {};
+      // The MAX_CACHE_SIZE is set to ~4x the maximum number of distinct values
+      // seen in our tests.
+      var MAX_CACHE_SIZE = 2048 * 4;
+      var cache_available = MAX_CACHE_SIZE;
       return function constructPostScriptFromIRResult(args) {
-        var initialStack = [];
-        for (var i = 0, ii = (domain.length / 2); i < ii; ++i) {
-          initialStack.push(args[i]);
+        var i, value;
+        var key = '';
+        var input = new Array(numInputs);
+        for (i = 0; i < numInputs; i++) {
+          value = args[i];
+          input[i] = value;
+          key += value + '_';
         }
 
-        var key = initialStack.join('_');
-        if (cache.has(key))
-          return cache.get(key);
-
-        var stack = evaluator.execute(initialStack);
-        var transformed = [];
-        for (i = numOutputs - 1; i >= 0; --i) {
-          var out = stack.pop();
-          var rangeIndex = 2 * i;
-          if (out < range[rangeIndex])
-            out = range[rangeIndex];
-          else if (out > range[rangeIndex + 1])
-            out = range[rangeIndex + 1];
-          transformed[i] = out;
+        var cachedValue = cache[key];
+        if (cachedValue !== undefined) {
+          return cachedValue;
         }
-        cache.set(key, transformed);
-        return transformed;
+
+        var output = new Array(numOutputs);
+        var stack = evaluator.execute(input);
+        var stackIndex = stack.length - numOutputs;
+        for (i = 0; i < numOutputs; i++) {
+          value = stack[stackIndex + i];
+          var bound = range[i * 2];
+          if (value < bound) {
+            value = bound;
+          } else {
+            bound = range[i * 2 +1];
+            if (value > bound) {
+              value = bound;
+            }
+          }
+          output[i] = value;
+        }
+        if (cache_available > 0) {
+          cache_available--;
+          cache[key] = output;
+        }
+        return output;
       };
     }
   };
-})();
-
-var FunctionCache = (function FunctionCacheClosure() {
-  // Of 10 PDF's with type4 functions the maxium number of distinct values seen
-  // was 256. This still may need some tweaking in the future though.
-  var MAX_CACHE_SIZE = 1024;
-  function FunctionCache() {
-    this.cache = {};
-    this.total = 0;
-  }
-  FunctionCache.prototype = {
-    has: function FunctionCache_has(key) {
-      return key in this.cache;
-    },
-    get: function FunctionCache_get(key) {
-      return this.cache[key];
-    },
-    set: function FunctionCache_set(key, value) {
-      if (this.total < MAX_CACHE_SIZE) {
-        this.cache[key] = value;
-        this.total++;
-      }
-    }
-  };
-  return FunctionCache;
 })();
 
 var PostScriptStack = (function PostScriptStackClosure() {
@@ -430,21 +444,25 @@ var PostScriptStack = (function PostScriptStackClosure() {
 
   PostScriptStack.prototype = {
     push: function PostScriptStack_push(value) {
-      if (this.stack.length >= MAX_STACK_SIZE)
+      if (this.stack.length >= MAX_STACK_SIZE) {
         error('PostScript function stack overflow.');
+      }
       this.stack.push(value);
     },
     pop: function PostScriptStack_pop() {
-      if (this.stack.length <= 0)
+      if (this.stack.length <= 0) {
         error('PostScript function stack underflow.');
+      }
       return this.stack.pop();
     },
     copy: function PostScriptStack_copy(n) {
-      if (this.stack.length + n >= MAX_STACK_SIZE)
+      if (this.stack.length + n >= MAX_STACK_SIZE) {
         error('PostScript function stack overflow.');
+      }
       var stack = this.stack;
-      for (var i = stack.length - n, j = n - 1; j >= 0; j--, i++)
+      for (var i = stack.length - n, j = n - 1; j >= 0; j--, i++) {
         stack.push(stack[i]);
+      }
     },
     index: function PostScriptStack_index(n) {
       this.push(this.stack[this.stack.length - n - 1]);
@@ -490,8 +508,9 @@ var PostScriptEvaluator = (function PostScriptEvaluatorClosure() {
           case 'jz': // jump if false
             b = stack.pop();
             a = stack.pop();
-            if (!a)
+            if (!a) {
               counter = b;
+            }
             break;
           case 'j': // jump
             a = stack.pop();
@@ -511,10 +530,11 @@ var PostScriptEvaluator = (function PostScriptEvaluatorClosure() {
           case 'and':
             b = stack.pop();
             a = stack.pop();
-            if (isBool(a) && isBool(b))
+            if (isBool(a) && isBool(b)) {
               stack.push(a && b);
-            else
+            } else {
               stack.push(a & b);
+            }
             break;
           case 'atan':
             a = stack.pop();
@@ -523,10 +543,11 @@ var PostScriptEvaluator = (function PostScriptEvaluatorClosure() {
           case 'bitshift':
             b = stack.pop();
             a = stack.pop();
-            if (a > 0)
+            if (a > 0) {
               stack.push(a << b);
-            else
+            } else {
               stack.push(a >> b);
+            }
             break;
           case 'ceiling':
             a = stack.pop();
@@ -629,22 +650,24 @@ var PostScriptEvaluator = (function PostScriptEvaluatorClosure() {
             break;
           case 'neg':
             a = stack.pop();
-            stack.push(-b);
+            stack.push(-a);
             break;
           case 'not':
             a = stack.pop();
-            if (isBool(a) && isBool(b))
-              stack.push(a && b);
-            else
-              stack.push(a & b);
+            if (isBool(a)) {
+              stack.push(!a);
+            } else {
+              stack.push(~a);
+            }
             break;
           case 'or':
             b = stack.pop();
             a = stack.pop();
-            if (isBool(a) && isBool(b))
+            if (isBool(a) && isBool(b)) {
               stack.push(a || b);
-            else
+            } else {
               stack.push(a | b);
+            }
             break;
           case 'pop':
             stack.pop();
@@ -682,10 +705,11 @@ var PostScriptEvaluator = (function PostScriptEvaluatorClosure() {
           case 'xor':
             b = stack.pop();
             a = stack.pop();
-            if (isBool(a) && isBool(b))
+            if (isBool(a) && isBool(b)) {
               stack.push(a != b);
-            else
+            } else {
               stack.push(a ^ b);
+            }
             break;
           default:
             error('Unknown operator ' + operator);

@@ -134,12 +134,9 @@
        "type": "eq"
     },
     {  "id": "issue2537",
-      "file": "pdfs/issue2537.pdf",
-      "md5": "f56805a70ed3aa52aae5c16dd335f827",
-      "link": true,
+      "file": "pdfs/issue2537r.pdf",
+      "md5": "0f47a8bda08eebd986c254e65dcc2a76",
       "rounds": 1,
-      "firstPage": 1,
-      "lastPage": 1,
       "type": "eq"
     },
     {  "id": "html5-canvas-cheat-sheet-load",
@@ -343,6 +340,21 @@
        "rounds": 1,
        "type": "load"
     },
+    {  "id": "bug878026",
+       "file": "pdfs/bug878026.pdf",
+       "md5": "13072db0586f2b4e96de189e23fc7395",
+       "rounds": 1,
+       "link": false,
+       "firstPage": 1,
+       "lastPage": 1,
+       "type": "eq"
+    },
+    {  "id": "issue4550-text",
+       "file": "pdfs/issue4550.pdf",
+       "md5": "d64cfc4b50e225f596130d9938e8d5cc",
+       "rounds": 1,
+       "type": "text"
+    },
     {  "id": "jai-pdf",
        "file": "pdfs/jai.pdf",
        "md5": "1f5dd128c3757420a881a155f2f8ace3",
@@ -378,6 +390,15 @@
        "rounds": 1,
        "type": "load"
     },
+    {  "id": "bug850854",
+       "file": "pdfs/bug850854.pdf",
+       "md5": "346a034a80120d123b9fefc42bcb11da",
+       "rounds": 1,
+       "link": false,
+       "firstPage": 1,
+       "lastPage": 1,
+       "type": "eq"
+    },
     {  "id": "wdsg_fitc",
        "file": "pdfs/wdsg_fitc.pdf",
        "md5": "5bb1c2b83705d4cdfc43197ee74f07f9",
@@ -404,6 +425,15 @@
        "md5": "4742c3f470cd8c4686a0dbb3da808b71",
        "link": true,
        "rounds": 1,
+       "type": "eq"
+    },
+    {  "id": "issue4650",
+       "file": "pdfs/issue4650.pdf",
+       "md5": "ad736804f57f9f96f5ac108e514e1686",
+       "rounds": 1,
+       "link": false,
+       "firstPage": 1,
+       "lastPage": 1,
        "type": "eq"
     },
     {  "id": "txt2pdf",
@@ -489,6 +519,14 @@
        "link": true,
        "rounds": 1,
        "type": "eq"
+    },
+    {  "id": "glyph_accent",
+       "file": "pdfs/glyph_accent.pdf",
+       "md5": "1526e4edaa3ec439ebf156d0a0b385aa",
+       "link": false,
+       "rounds": 1,
+       "type": "eq",
+       "about": "Glyph accent drawn as curves."
     },
     {  "id": "simpletype3font",
        "file": "pdfs/simpletype3font.pdf",
@@ -616,13 +654,6 @@
       "rounds": 1,
       "type": "load"
     },
-    {  "id": "aboutstacks",
-      "file": "pdfs/aboutstacks.pdf",
-      "md5": "6e7c8416a293ba2d83bc8dd20c6ccf51",
-      "rounds": 1,
-      "link": true,
-      "type": "eq"
-    },
     {  "id": "smaskdim",
       "file": "pdfs/smaskdim.pdf",
       "md5": "de80aeca7cbf79940189fd34d59671ee",
@@ -640,6 +671,16 @@
       "md5": "7e6027a02ff78577f74dccdf84e37189",
       "rounds": 1,
       "type": "eq"
+    },
+    {  "id": "issue4573",
+       "file": "pdfs/issue4573.pdf",
+       "md5": "34b0c4fdee19e57033275b766c5f57a3",
+       "rounds": 1,
+       "link": false,
+       "firstPage": 1,
+       "lastPage": 1,
+       "type": "eq",
+       "about": "Seac with differences array that messes up mapping."
     },
     {  "id": "ocs",
       "file": "pdfs/ocs.pdf",
@@ -708,6 +749,13 @@
       "rounds": 1,
       "link": true,
       "type": "eq"
+    },
+    {  "id": "issue4461-load",
+      "file": "pdfs/issue4461.pdf",
+      "md5": "9df4ecaae429adb5dc93d9342a53159d",
+      "rounds": 1,
+      "type": "load",
+      "about": "Document without /Resources entry in page dictionary"
     },
     {  "id": "issue1249-load",
       "file": "pdfs/issue1249.pdf",
@@ -1006,6 +1054,12 @@
       "rounds": 1,
       "lastPage": 2,
       "link": true,
+      "type": "eq"
+    },
+    {  "id": "issue4630",
+      "file": "pdfs/issue4630.pdf",
+      "md5": "46690a12b953c9ad660f3f6453f8785c",
+      "rounds": 1,
       "type": "eq"
     },
     {  "id": "issue845",
@@ -1536,6 +1590,12 @@
        "lastPage": 1,
        "type": "load"
     },
+    {  "id": "issue4668",
+      "file": "pdfs/issue4668.pdf",
+      "md5": "a749d5ca995ad745411406d29156b04e",
+      "rounds": 1,
+      "type": "eq"
+    },
     {  "id": "issue3666",
        "file": "pdfs/issue3666.pdf",
        "md5": "c2156a34b9634b174556910732ab9df0",
@@ -1560,6 +1620,22 @@
        "link": true,
        "firstPage": 4,
        "lastPage": 4,
+       "type": "eq"
+    },
+    {  "id": "issue4246",
+      "file": "pdfs/issue4246.pdf",
+      "md5": "ed81787b83cc317c9f049643b853bea3",
+      "rounds": 1,
+      "type": "eq",
+      "about": "Image mask in higher resolution than the image itself"
+    },
+    {  "id": "issue4436",
+       "file": "pdfs/issue4436.pdf",
+       "md5": "34e6af7441961f5940e6440a62e37427",
+       "rounds": 1,
+       "link": true,
+       "firstPage": 9,
+       "lastPage": 9,
        "type": "eq"
     }
 ]

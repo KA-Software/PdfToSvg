@@ -17,7 +17,7 @@ describe('parser', function() {
     it('should parse PostScript numbers', function() {
       var numbers = ['-.002', '34.5', '-3.62', '123.6e10', '1E-5', '-1.', '0.0',
                     '123', '-98', '43445', '0', '+17'];
-      for (var i=0, ii=numbers.length; i<ii; i++) {
+      for (var i = 0, ii = numbers.length; i < ii; i++) {
         var num = numbers[i];
         var input = new StringStream(num);
         var lexer = new Lexer(input);
@@ -43,7 +43,7 @@ describe('parser', function() {
       input.getByte = function(super_getByte) {
         // simulating end of file using null (see issue 2766)
         var ch = super_getByte.call(input);
-        return ch === 0x24 /* '$' */ ? -1 : ch;
+        return (ch === 0x24 /* '$' */ ? -1 : ch);
       }.bind(input, input.getByte);
       var lexer = new Lexer(input);
       var result = lexer.getString();
@@ -60,6 +60,17 @@ describe('parser', function() {
       var result = lexer.getHexString();
 
       expect(result).toEqual('p!U"$2');
+    });
+
+    it('should ignore escaped CR and LF', function() {
+      // '(\101\<CR><LF>\102)'
+      // should be parsed as
+      // "AB"
+      var input = new StringStream('(\\101\\\r\n\\102\\\r\\103\\\n\\104)');
+      var lexer = new Lexer(input);
+      var result = lexer.getString();
+
+      expect(result).toEqual('ABCD');
     });
   });
 });
