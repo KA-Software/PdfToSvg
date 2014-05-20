@@ -172,7 +172,16 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
 		executeOperatorList: function SVGGraphics_executeOperatorList(operatorList) {
 			var argsArray = operatorList.argsArray;
 			var fnArray = operatorList.fnArray;
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
 		executeOperatorList: function SVGGraphics_executeOperatorList(
 														operatorList, executionStartIdx,
 											 			continueCallback) {
@@ -180,7 +189,16 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
 			var argsArray = operatorList.argsArray;
 			var fnArray = operatorList.fnArray;
 			var i = executionStartIdx || 0;
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
 >>>>>>> ac43f77cecf5b4159915cbabac151c3a87db86f7
+=======
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
 			var argsArrayLen = argsArray.length;
 			console.log(argsArray);
 			console.log(fnArray);
