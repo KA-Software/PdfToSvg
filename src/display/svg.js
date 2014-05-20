@@ -167,25 +167,15 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
 		beginDrawing: function SVGGraphics_beginDrawing(viewport, transparency) {
 
 		},
-
-		executeOperatorList: function SVGGraphics_executeOperatorList(operatorList) {
-			var argsArray = operatorList.argsArray;
-			var fnArray = operatorList.fnArray;
-
-<<<<<<< HEAD
+		
 		executeOperatorList: function SVGGraphics_executeOperatorList(operatorList) {
 
 			var argsArray = operatorList.argsArray;
 			var fnArray = operatorList.fnArray;
-=======
-		executeOperatorList: function SVGGraphics_executeOperatorList(
-														operatorList, executionStartIdx,
-											 			continueCallback) {
-
+		
 			var argsArray = operatorList.argsArray;
 			var fnArray = operatorList.fnArray;
 			var i = executionStartIdx || 0;
->>>>>>> d4e6733d5be8ab6e391c2d42a8e617555e8e4210
 
 			var argsArrayLen = argsArray.length;
 			console.log(argsArray);
