@@ -179,6 +179,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
 			var argsArray = operatorList.argsArray;
 			var fnArray = operatorList.fnArray;
 			var i = executionStartIdx || 0;
+
 			var argsArrayLen = argsArray.length;
 			console.log(argsArray);
 			console.log(fnArray);
