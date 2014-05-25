@@ -507,11 +507,17 @@ var Catalog = (function CatalogClosure() {
     },
 
     cleanup: function Catalog_cleanup() {
-      this.fontCache.forEach(function (font) {
-        delete font.sent;
-        delete font.translated;
+      var promises = [];
+      this.fontCache.forEach(function (promise) {
+        promises.push(promise);
       });
-      this.fontCache.clear();
+      return Promise.all(promises).then(function (translatedFonts) {
+        for (var i = 0, ii = translatedFonts.length; i < ii; i++) {
+          var font = translatedFonts[i].dict;
+          delete font.translated;
+        }
+        this.fontCache.clear();
+      }.bind(this));
     },
 
     getPage: function Catalog_getPage(pageIndex) {

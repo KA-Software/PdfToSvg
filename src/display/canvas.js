@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals ColorSpace, DeviceCmykCS, DeviceGrayCS, DeviceRgbCS, error, PDFJS,
+/* globals error, PDFJS, assert, info, shadow, TextRenderingMode,
            FONT_IDENTITY_MATRIX, Uint32ArrayView, IDENTITY_MATRIX, ImageData,
            ImageKind, isArray, isNum, TilingPattern, OPS, Promise, Util, warn,
-           assert, info, shadow, TextRenderingMode, getShadingPatternFromIR,
-           WebGLUtils */
+           getShadingPatternFromIR, WebGLUtils */
 
 'use strict';
 
@@ -366,13 +365,6 @@ var CanvasExtraState = (function CanvasExtraStateClosure() {
     this.textHScale = 1;
     this.textRenderingMode = TextRenderingMode.FILL;
     this.textRise = 0;
-    // Color spaces
-    this.fillColorSpace = ColorSpace.singletons.gray;
-    this.fillColorSpaceObj = null;
-    this.strokeColorSpace = ColorSpace.singletons.gray;
-    this.strokeColorSpaceObj = null;
-    this.fillColorObj = null;
-    this.strokeColorObj = null;
     // Default fore and background colors
     this.fillColor = '#000000';
     this.strokeColor = '#000000';
@@ -673,11 +665,7 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
     ctx.setTransform(smask.scaleX, 0, 0, smask.scaleY,
                      smask.offsetX, smask.offsetY);
 
-    var backdrop;
-    if (smask.backdrop) {
-      var cs = smask.colorSpace || ColorSpace.singletons.rgb;
-      backdrop = cs.getRgb(smask.backdrop, 0);
-    }
+    var backdrop = smask.backdrop || null;
     if (WebGLUtils.isEnabled) {
       var composed = WebGLUtils.composeSMask(layerCtx.canvas, mask,
         {subtype: smask.subtype, backdrop: backdrop});
@@ -983,10 +971,10 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
             ctx.lineTo(x, y);
             break;
           case OPS.curveTo:
-            ctx.bezierCurveTo(args[j], args[j + 1], args[j + 2], args[j + 3],
-                              args[j + 4], args[j + 5]);
             x = args[j + 4];
             y = args[j + 5];
+            ctx.bezierCurveTo(args[j], args[j + 1], args[j + 2], args[j + 3],
+                              x, y);
             j += 6;
             break;
           case OPS.curveTo2:
@@ -997,10 +985,9 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
             j += 4;
             break;
           case OPS.curveTo3:
-            ctx.bezierCurveTo(args[j], args[j + 1], args[j + 2], args[j + 3],
-                              args[j + 2], args[j + 3]);
             x = args[j + 2];
             y = args[j + 3];
+            ctx.bezierCurveTo(args[j], args[j + 1], x, y, x, y);
             j += 4;
             break;
           case OPS.closePath:
@@ -1068,21 +1055,21 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       }
 
       if (this.pendingEOFill) {
-        if ('mozFillRule' in this.ctx) {
-          this.ctx.mozFillRule = 'evenodd';
-          this.ctx.fill();
-          this.ctx.mozFillRule = 'nonzero';
+        if (ctx.mozFillRule !== undefined) {
+          ctx.mozFillRule = 'evenodd';
+          ctx.fill();
+          ctx.mozFillRule = 'nonzero';
         } else {
           try {
-            this.ctx.fill('evenodd');
+            ctx.fill('evenodd');
           } catch (ex) {
             // shouldn't really happen, but browsers might think differently
-            this.ctx.fill();
+            ctx.fill();
           }
         }
         this.pendingEOFill = false;
       } else {
-        this.ctx.fill();
+        ctx.fill();
       }
 
       if (needRestore) {
@@ -1134,12 +1121,12 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       this.current.y = this.current.lineY = 0;
     },
     endText: function CanvasGraphics_endText() {
-      if (!('pendingTextPaths' in this)) {
-        this.ctx.beginPath();
-        return;
-      }
       var paths = this.pendingTextPaths;
       var ctx = this.ctx;
+      if (paths === undefined) {
+        ctx.beginPath();
+        return;
+      }
 
       ctx.save();
       ctx.beginPath();
@@ -1196,7 +1183,7 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       this.current.font = fontObj;
       this.current.fontSize = size;
 
-      if (fontObj.coded) {
+      if (fontObj.isType3Font) {
         return; // we don't need ctx.font for Type3 fonts
       }
 
@@ -1343,7 +1330,7 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       }
 
       // Type3 fonts - each glyph is a "mini-PDF"
-      if (font.coded) {
+      if (font.isType3Font) {
         ctx.save();
         ctx.transform.apply(ctx, current.textMatrix);
         ctx.translate(current.x, current.y);
@@ -1363,7 +1350,8 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
           this.save();
           ctx.scale(fontSize, fontSize);
           ctx.transform.apply(ctx, fontMatrix);
-          this.executeOperatorList(glyph.operatorList);
+          var operatorList = font.charProcOperatorList[glyph.operatorListId];
+          this.executeOperatorList(operatorList);
           this.restore();
 
           var transformed = Util.applyTransform([glyph.width, 0], fontMatrix);
@@ -1519,28 +1507,10 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
     },
 
     // Color
-    setStrokeColorSpace: function CanvasGraphics_setStrokeColorSpace(raw) {
-      this.current.strokeColorSpace = ColorSpace.fromIR(raw);
-    },
-    setFillColorSpace: function CanvasGraphics_setFillColorSpace(raw) {
-      this.current.fillColorSpace = ColorSpace.fromIR(raw);
-    },
-    setStrokeColor: function CanvasGraphics_setStrokeColor(/*...*/) {
-      var cs = this.current.strokeColorSpace;
-      var rgbColor = cs.getRgb(arguments, 0);
-      var color = Util.makeCssRgb(rgbColor);
-      this.ctx.strokeStyle = color;
-      this.current.strokeColor = color;
-    },
-    getColorN_Pattern: function CanvasGraphics_getColorN_Pattern(IR, cs) {
+    getColorN_Pattern: function CanvasGraphics_getColorN_Pattern(IR) {
       var pattern;
       if (IR[0] == 'TilingPattern') {
-        var args = IR[1];
-        var base = cs.base;
-        var color;
-        if (base) {
-          color = base.getRgb(args, 0);
-        }
+        var color = IR[1];
         pattern = new TilingPattern(IR, color, this.ctx, this.objs,
                                     this.commonObjs, this.baseTransform);
       } else {
@@ -1549,73 +1519,18 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       return pattern;
     },
     setStrokeColorN: function CanvasGraphics_setStrokeColorN(/*...*/) {
-      var cs = this.current.strokeColorSpace;
-
-      if (cs.name == 'Pattern') {
-        this.current.strokeColor = this.getColorN_Pattern(arguments, cs);
-      } else {
-        this.setStrokeColor.apply(this, arguments);
-      }
-    },
-    setFillColor: function CanvasGraphics_setFillColor(/*...*/) {
-      var cs = this.current.fillColorSpace;
-      var rgbColor = cs.getRgb(arguments, 0);
-      var color = Util.makeCssRgb(rgbColor);
-      this.ctx.fillStyle = color;
-      this.current.fillColor = color;
+      this.current.strokeColor = this.getColorN_Pattern(arguments);
     },
     setFillColorN: function CanvasGraphics_setFillColorN(/*...*/) {
-      var cs = this.current.fillColorSpace;
-
-      if (cs.name == 'Pattern') {
-        this.current.fillColor = this.getColorN_Pattern(arguments, cs);
-      } else {
-        this.setFillColor.apply(this, arguments);
-      }
-    },
-    setStrokeGray: function CanvasGraphics_setStrokeGray(gray) {
-      this.current.strokeColorSpace = ColorSpace.singletons.gray;
-
-      var rgbColor = this.current.strokeColorSpace.getRgb(arguments, 0);
-      var color = Util.makeCssRgb(rgbColor);
-      this.ctx.strokeStyle = color;
-      this.current.strokeColor = color;
-    },
-    setFillGray: function CanvasGraphics_setFillGray(gray) {
-      this.current.fillColorSpace = ColorSpace.singletons.gray;
-
-      var rgbColor = this.current.fillColorSpace.getRgb(arguments, 0);
-      var color = Util.makeCssRgb(rgbColor);
-      this.ctx.fillStyle = color;
-      this.current.fillColor = color;
+      this.current.fillColor = this.getColorN_Pattern(arguments);
     },
     setStrokeRGBColor: function CanvasGraphics_setStrokeRGBColor(r, g, b) {
-      this.current.strokeColorSpace = ColorSpace.singletons.rgb;
-
-      var rgbColor = this.current.strokeColorSpace.getRgb(arguments, 0);
-      var color = Util.makeCssRgb(rgbColor);
+      var color = Util.makeCssRgb(arguments);
       this.ctx.strokeStyle = color;
       this.current.strokeColor = color;
     },
     setFillRGBColor: function CanvasGraphics_setFillRGBColor(r, g, b) {
-      this.current.fillColorSpace = ColorSpace.singletons.rgb;
-
-      var rgbColor = this.current.fillColorSpace.getRgb(arguments, 0);
-      var color = Util.makeCssRgb(rgbColor);
-      this.ctx.fillStyle = color;
-      this.current.fillColor = color;
-    },
-    setStrokeCMYKColor: function CanvasGraphics_setStrokeCMYKColor(c, m, y, k) {
-      this.current.strokeColorSpace = ColorSpace.singletons.cmyk;
-
-      var color = Util.makeCssCmyk(arguments);
-      this.ctx.strokeStyle = color;
-      this.current.strokeColor = color;
-    },
-    setFillCMYKColor: function CanvasGraphics_setFillCMYKColor(c, m, y, k) {
-      this.current.fillColorSpace = ColorSpace.singletons.cmyk;
-
-      var color = Util.makeCssCmyk(arguments);
+      var color = Util.makeCssRgb(arguments);
       this.ctx.fillStyle = color;
       this.current.fillColor = color;
     },
@@ -1774,8 +1689,7 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
           scaleX: scaleX,
           scaleY: scaleY,
           subtype: group.smask.subtype,
-          backdrop: group.smask.backdrop,
-          colorSpace: group.colorSpace && ColorSpace.fromIR(group.colorSpace)
+          backdrop: group.smask.backdrop
         });
       } else {
         // Setup the current ctx so when the group is popped we draw it at the
@@ -1803,7 +1717,7 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       this.ctx = this.groupStack.pop();
       // Turn off image smoothing to avoid sub pixel interpolation which can
       // look kind of blurry for some pdfs.
-      if ('imageSmoothingEnabled' in this.ctx) {
+      if (this.ctx.imageSmoothingEnabled !== undefined) {
         this.ctx.imageSmoothingEnabled = false;
       } else {
         this.ctx.mozImageSmoothingEnabled = false;
@@ -2145,26 +2059,27 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
     // Helper functions
 
     consumePath: function CanvasGraphics_consumePath() {
+      var ctx = this.ctx;
       if (this.pendingClip) {
         if (this.pendingClip == EO_CLIP) {
-          if ('mozFillRule' in this.ctx) {
-            this.ctx.mozFillRule = 'evenodd';
-            this.ctx.clip();
-            this.ctx.mozFillRule = 'nonzero';
+          if (ctx.mozFillRule !== undefined) {
+            ctx.mozFillRule = 'evenodd';
+            ctx.clip();
+            ctx.mozFillRule = 'nonzero';
           } else {
             try {
-              this.ctx.clip('evenodd');
+              ctx.clip('evenodd');
             } catch (ex) {
               // shouldn't really happen, but browsers might think differently
-              this.ctx.clip();
+              ctx.clip();
             }
           }
         } else {
-          this.ctx.clip();
+          ctx.clip();
         }
         this.pendingClip = null;
       }
-      this.ctx.beginPath();
+      ctx.beginPath();
     },
     getSinglePixelWidth: function CanvasGraphics_getSinglePixelWidth(scale) {
       var inverse = this.ctx.mozCurrentTransformInverse;
