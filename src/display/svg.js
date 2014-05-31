@@ -24,13 +24,15 @@
 
 function createScratchSVG(width, height) {
   var NS = "http://www.w3.org/2000/svg";
+  var xlinkNS = "http://www.w3.org/1999/xlink";
   var svg = document.createElementNS(NS, 'svg:svg');
   svg.setAttributeNS(null, "version", "1.1");
   svg.setAttributeNS(null, "width", width + 'px');
   svg.setAttributeNS(null, "height", height + 'px');
-  svg.setAttributeNS(null, "viewBox", "0 0 " + width + " " + height);
+  svg.setAttributeNS(null, "viewBox", "0 " + (-height) + " " + width + " " + height);
   return svg;
 }
+
 
 var SVGExtraState = (function SVGExtraStateClosure() {
   function SVGExtraState(old) {
@@ -55,6 +57,10 @@ var SVGExtraState = (function SVGExtraStateClosure() {
     // Default fore and background colors
     this.fillColor = '#000000';
     this.strokeColor = '#000000';
+
+    // Text path related variables
+    this.pathCount = 0;
+    this.textPathCount = 0;
 
   }
 
@@ -129,6 +135,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       console.log("begin drawing svg")
       this.svg = createScratchSVG(viewport.width, viewport.height);
       this.NS = "http://www.w3.org/2000/svg";
+      this.xlinkNS = "http://www.w3.org/1999/xlink";
       this.container = document.getElementById('pageContainer');
       this.viewport = viewport;
       this.transformMatrix = [];
@@ -194,7 +201,9 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.current.y = this.current.lineY = 0;
       this.current.textMatrix = IDENTITY_MATRIX;
       this.current.lineMatrix = IDENTITY_MATRIX;
-      console.log(this.current.textMatrix)
+      this.current.defs = document.createElementNS(this.NS, 'svg:defs');
+      this.current.path = document.createElementNS(this.NS, 'svg:path');
+      this.current.grp = document.createElementNS(this.NS, 'svg:g');
       //this.text = document.createElementNS(this.NS, 'svg:text');
     },
 
@@ -208,12 +217,22 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.current.y = this.current.lineY += args[1];
       this.current.textMatrix[4] = current.x;
       this.current.textMatrix[5] = current.y;
+
+      //current.grp.setAttributeNS(null, 'transform', 'matrix(2, 0, 0, 2, 0, 0)');
+      current.path = document.createElementNS(this.NS, 'svg:path');
+      current.path.setAttributeNS(null, "id", "path-" + current.pathCount++);
+      current.path.setAttributeNS(null, "d", "M " + current.x + " " + (-current.y));
+
+      current.defs.appendChild(current.path);
+      current.grp.appendChild(current.defs);
+
       //current.textMatrix = PDFJS.Util.transform([1, 0, 0, 1, args[0], args[1]], current.textMatrix)
     },
 
     showText: function SVGGraphics_showText(text) {
       var str = '';
       var current = this.current;
+
       var fontDirection = current.fontDirection;
       var fontSize = current.fontSize;
       var wordSpacing = current.wordSpacing;
@@ -224,10 +243,10 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       var style = current.font.style;
 
 
-
       var tx = PDFJS.Util.transform(this.viewport.transform, current.textMatrix); // Apply viewport transform
       tx = PDFJS.Util.transform(tx, [1, 0, 0, -1, 0, 0]); // Flip text
 
+      console.log(this.viewport.transform)
       var t = 0;
 
       for (var x = 0; x < text.length; x++) {
@@ -244,13 +263,50 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.x += t * textHScale;
       current.textMatrix[4] = current.x;
 
-      var txtElement = document.createElementNS(this.NS, 'svg:text');
+      var d = current.path.getAttributeNS(null, 'd');
+      d = d + "L " + current.x + " " + (-current.y);
+      current.path.setAttributeNS(null, 'd', d);
+
+      /*var txtElement = document.createElementNS(this.NS, 'svg:text');
+      txtElement.setAttributeNS(null, 'font-family', 'Times New Roman');
+      txtElement.setAttributeNS(null, 'font-size', current.fontSize);
+      var txtPath = document.createElementNS(this.NS, 'svg:textPath');
+      txtPath.setAttributeNS(this.xlinkNS, 'xlink:href', "#path-" + (current.pathCount - 1));
+      console.log(current.pathCount);
+      txtPath.textContent = str;
+      txtElement.appendChild(txtPath);
+      //current.grp.setAttributeNS(null, 'transform', 'matrix(' + tx + ')');
+      //current.grp.appendChild(txtElement);
+      this.svg.appendChild(txtElement);
+*/
+
+      var txtPath = document.getElementById('#path-' + (current.pathCount -1));
+      if (txtPath) {
+        txtPath.textContent += str;
+      } else {
+        var txtElement = document.createElementNS(this.NS, 'svg:text');
+        txtElement.setAttributeNS(null, 'font-family', "Times New Roman");
+        txtElement.setAttributeNS(null, 'transform', 'scale(1, -1)');
+        txtElement.setAttributeNS(null, 'font-size', current.fontSize);
+        var txtPath = document.createElementNS(this.NS, 'svg:textPath');
+        txtPath.setAttributeNS(this.xlinkNS, 'xlink:href', "#path-" + (current.pathCount - 1));
+        txtPath.setAttributeNS(null, 'id', '#path-' + (current.pathCount - 1));
+        txtPath.setAttributeNS(null, 'spacing', 'auto')
+        txtPath.textContent = str;
+        txtElement.appendChild(txtPath);
+        current.grp.setAttributeNS(null, 'transform', 'scale(2, -2)');
+        current.grp.appendChild(txtElement);
+        this.svg.appendChild(this.current.grp);
+
+      }
+
+      /*var txtElement = document.createElementNS(this.NS, 'svg:text');
       txtElement.textContent = str;
-      txtElement.setAttributeNS(null, 'font-family', 'verdana');
+      txtElement.setAttributeNS(null, 'font-family', 'Times New Roman');
       txtElement.setAttributeNS(null, 'font-size', current.fontSize);
       txtElement.setAttributeNS(null, 'style', current.font.style);
       txtElement.setAttributeNS(null, 'transform', 'matrix(' + tx + ')');
-      this.svg.appendChild(txtElement);
+      this.svg.appendChild(txtElement);*/
     },
 
     showSpacedText: function SVGGraphics_showSpacedText(arr) {
@@ -277,6 +333,9 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
             current.x += spacingLength;
             current.textMatrix[4] = current.x;
           }
+          var d = current.path.getAttributeNS(null, 'd');
+          d = d + "M" + current.x + " " + (-current.y);
+          current.path.setAttributeNS(null, 'd', d);
         } else {
           this.showText(e);
         }
