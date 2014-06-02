@@ -50,7 +50,7 @@ var SVGExtraState = (function SVGExtraStateClosure() {
     this.lineY = 0;
     // Character and word spacing
     this.charSpacing = 0;
-    this.wordSpacing = 1;
+    this.wordSpacing = 0;
     this.textHScale = 1;
     this.textRenderingMode = TextRenderingMode.FILL;
     this.textRise = 0;
@@ -62,13 +62,15 @@ var SVGExtraState = (function SVGExtraStateClosure() {
     this.pathCount = 0;
     this.textPathCount = 0;
 
+    // Dependency array
+    this.dependencies = [];
   }
 
   SVGExtraState.prototype = {
-    clone: function CanvasExtraState_clone() {
+    clone: function SVGExtraState_clone() {
       return Object.create(this);
     },
-    setCurrentPoint: function CanvasExtraState_setCurrentPoint(x, y) {
+    setCurrentPoint: function SVGExtraState_setCurrentPoint(x, y) {
       this.x = x;
       this.y = y;
     }
@@ -164,14 +166,13 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       }
 
       opTree = opListToTree(opList);
+      var len = opTree.length;
 
       console.log(opTree)
-
       //window.prompt('', JSON.stringify(opTree));
-
-      for(var x =0; x < opTree.length; x++) {
+      
+      for(var x = 0; x < len; x++) {
         var fn = opTree[x].fn;
-
         if (fn == 'beginText') {
           this.beginText(argsArray[x]);
         }
@@ -196,6 +197,36 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       }
     },
 
+    loadDependencies: function SVGGraphics_loadDependencies(operatorList) {
+      //var fnArray = operatorList.fnArray;
+      console.log(operatorList);
+      var fnArray = operatorList.fnArray;
+      var fnArrayLen = fnArray.length;
+      var argsArray = operatorList.argsArray;
+
+      var self = this;
+      for (var i = 0; i < fnArrayLen; i++) {
+        if (OPS.dependency == fnArray[i]) {
+          var deps = argsArray[i];
+          console.log(deps);
+          for (var n = 0, nn = deps.length; n < nn; n++) {
+            var obj = deps[n];
+            var common = obj.substring(0, 2) == 'g_';
+            if (common) {
+              var promise = new Promise(function(resolve) {
+                self.commonObjs.get(obj, resolve);
+              });
+            }
+          }
+        }
+        this.current.dependencies.push(promise);
+      }
+      Promise.all(this.current.dependencies).then(function(values) {
+        console.log('All dependencies resolved')
+        self.executeOperatorList(operatorList);
+      });
+    },
+    
     beginText: function SVGGraphics_beginText(args) {
       this.current.x = this.current.lineX = 0;
       this.current.y = this.current.lineY = 0;
@@ -246,7 +277,6 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       var tx = PDFJS.Util.transform(this.viewport.transform, current.textMatrix); // Apply viewport transform
       tx = PDFJS.Util.transform(tx, [1, 0, 0, -1, 0, 0]); // Flip text
 
-      console.log(this.viewport.transform)
       var t = 0;
 
       for (var x = 0; x < text.length; x++) {
@@ -267,25 +297,12 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       d = d + "L " + current.x + " " + (-current.y);
       current.path.setAttributeNS(null, 'd', d);
 
-      /*var txtElement = document.createElementNS(this.NS, 'svg:text');
-      txtElement.setAttributeNS(null, 'font-family', 'Times New Roman');
-      txtElement.setAttributeNS(null, 'font-size', current.fontSize);
-      var txtPath = document.createElementNS(this.NS, 'svg:textPath');
-      txtPath.setAttributeNS(this.xlinkNS, 'xlink:href', "#path-" + (current.pathCount - 1));
-      console.log(current.pathCount);
-      txtPath.textContent = str;
-      txtElement.appendChild(txtPath);
-      //current.grp.setAttributeNS(null, 'transform', 'matrix(' + tx + ')');
-      //current.grp.appendChild(txtElement);
-      this.svg.appendChild(txtElement);
-*/
-
       var txtPath = document.getElementById('#path-' + (current.pathCount -1));
       if (txtPath) {
         txtPath.textContent += str;
       } else {
         var txtElement = document.createElementNS(this.NS, 'svg:text');
-        txtElement.setAttributeNS(null, 'font-family', "Times New Roman");
+        txtElement.setAttributeNS(null, 'font-family', 'Times New Roman');
         txtElement.setAttributeNS(null, 'transform', 'scale(1, -1)');
         txtElement.setAttributeNS(null, 'font-size', current.fontSize);
         var txtPath = document.createElementNS(this.NS, 'svg:textPath');
@@ -297,16 +314,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
         current.grp.setAttributeNS(null, 'transform', 'scale(2, -2)');
         current.grp.appendChild(txtElement);
         this.svg.appendChild(this.current.grp);
-
       }
-
-      /*var txtElement = document.createElementNS(this.NS, 'svg:text');
-      txtElement.textContent = str;
-      txtElement.setAttributeNS(null, 'font-family', 'Times New Roman');
-      txtElement.setAttributeNS(null, 'font-size', current.fontSize);
-      txtElement.setAttributeNS(null, 'style', current.font.style);
-      txtElement.setAttributeNS(null, 'transform', 'matrix(' + tx + ')');
-      this.svg.appendChild(txtElement);*/
     },
 
     showSpacedText: function SVGGraphics_showSpacedText(arr) {
@@ -374,6 +382,16 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       }
       current.fontSize = size;
       current.fontFamily = fontObj.loadedName;
+
+      var font = document.createElementNS(this.NS, 'svg:font');
+      var fontface = document.createElementNS(this.NS, 'svg:font-face');
+      font.setAttributeNS(null, 'id', current.fontFamily);
+      font.setAttributeNS(null, 'horiz-adv-x', '1000');
+      fontface.setAttributeNS(null, 'font-family', current.fontFamily);
+      fontface.setAttributeNS(null, 'ascent', current.font.ascent);
+      fontface.setAttributeNS(null, 'descent', current.font.descent);
+      font.appendChild(fontface);
+      this.current.defs.appendChild(font);
     },
 
     endText: function SVGGraphics_endText(args) {
