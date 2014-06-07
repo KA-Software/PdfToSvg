@@ -38,7 +38,7 @@ http://sourceforge.net/adobe/cmap/wiki/License/
     <link rel="resource" type="application/l10n" href="locale/locale.properties"/>
 <!--#endif-->
 
-<!--#if !(FIREFOX || MOZCENTRAL || CHROME || MINIFIED)-->
+<!--#if !(MOZCENTRAL || CHROME || MINIFIED)-->
     <script src="compatibility.js"></script>
 <!--#endif-->
 
@@ -48,8 +48,6 @@ http://sourceforge.net/adobe/cmap/wiki/License/
 
 <!--#if !PRODUCTION-->
     <script src="../src/shared/util.js"></script>
-    <script src="../src/shared/colorspace.js"></script>
-    <script src="../src/shared/function.js"></script>
     <script src="../src/shared/annotation.js"></script>
     <script src="../src/display/api.js"></script>
     <script src="../src/display/metadata.js"></script>
@@ -79,10 +77,11 @@ http://sourceforge.net/adobe/cmap/wiki/License/
     <script src="pdf_find_controller.js"></script>
     <script src="pdf_history.js"></script>
     <script src="secondary_toolbar.js"></script>
-    <script src="password_prompt.js"></script>
     <script src="presentation_mode.js"></script>
     <script src="grab_to_pan.js"></script>
     <script src="hand_tool.js"></script>
+    <script src="overlay_manager.js"></script>
+    <script src="password_prompt.js"></script>
     <script src="document_properties.js"></script>
 <!--#endif-->
 

@@ -131,13 +131,19 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         };
 
         var groupSubtype = group.get('S');
+        var colorSpace;
         if (isName(groupSubtype) && groupSubtype.name === 'Transparency') {
           groupOptions.isolated = (group.get('I') || false);
           groupOptions.knockout = (group.get('K') || false);
-          var colorSpace = group.get('CS');
-          groupOptions.colorSpace = (colorSpace ?
-            ColorSpace.parseToIR(colorSpace, this.xref, resources) : null);
+          colorSpace = (group.has('CS') ?
+            ColorSpace.parse(group.get('CS'), this.xref, resources) : null);
         }
+
+        if (smask && smask.backdrop) {
+          colorSpace = colorSpace || ColorSpace.singletons.rgb;
+          smask.backdrop = colorSpace.getRgb(smask.backdrop, 0);
+        }
+
         operatorList.addOp(OPS.beginGroup, [groupOptions]);
       }
 
@@ -292,28 +298,26 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         fontArgs = fontArgs.slice();
         fontName = fontArgs[0].name;
       }
+
       var self = this;
-      return this.loadFont(fontName, fontRef, this.xref, resources,
-                               operatorList).then(function (font) {
-          state.font = font;
-          var loadedName = font.loadedName;
-          if (!font.sent) {
-            var fontData = font.translated.exportData();
-
-            self.handler.send('commonobj', [
-              loadedName,
-              'Font',
-              fontData
-            ]);
-            font.sent = true;
-          }
-
-          return loadedName;
+      return this.loadFont(fontName, fontRef, this.xref, resources).then(
+          function (translated) {
+        if (!translated.font.isType3Font) {
+          return translated;
+        }
+        return translated.loadType3Data(self, resources, operatorList).then(
+            function () {
+          return translated;
         });
+      }).then(function (translated) {
+        state.font = translated.font;
+        translated.send(self.handler);
+        return translated.loadedName;
+      });
     },
 
     handleText: function PartialEvaluator_handleText(chars, state) {
-      var font = state.font.translated;
+      var font = state.font;
       var glyphs = font.charsToGlyphs(chars);
       var isAddToPathSet = !!(state.textRenderingMode &
                               TextRenderingMode.ADD_TO_PATH_FLAG);
@@ -439,16 +443,12 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
     },
 
     loadFont: function PartialEvaluator_loadFont(fontName, font, xref,
-                                                 resources,
-                                                 parentOperatorList) {
+                                                 resources) {
 
       function errorFont() {
-        return Promise.resolve({
-          translated: new ErrorFont('Font ' + fontName + ' is not available'),
-          loadedName: 'g_font_error'
-        });
+        return Promise.resolve(new TranslatedFont('g_font_error',
+          new ErrorFont('Font ' + fontName + ' is not available'), font));
       }
-
       var fontRef;
       if (font) { // Loading by ref.
         assert(isRef(font));
@@ -471,6 +471,12 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         return errorFont();
       }
 
+      // We are holding font.translated references just for fontRef that are not
+      // dictionaries (Dict). See explanation below.
+      if (font.translated) {
+        return font.translated;
+      }
+
       var fontCapability = createPromiseCapability();
 
       var preEvaluatedFont = this.preEvaluateFont(font, xref);
@@ -487,8 +493,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
           var aliasFontRef = fontAliases[hash].aliasRef;
           if (aliasFontRef && this.fontCache.has(aliasFontRef)) {
             this.fontCache.putAlias(fontRef, aliasFontRef);
-            var cachedFont = this.fontCache.get(fontRef);
-            return cachedFont;
+            return this.fontCache.get(fontRef);
           }
         }
 
@@ -517,49 +522,28 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       font.loadedName = 'g_font_' + (fontRefIsDict ?
         fontName.replace(/\W/g, '') : fontID);
 
-      if (!font.translated) {
-        var translated;
-        try {
-          translated = this.translateFont(preEvaluatedFont, xref);
-        } catch (e) {
-          UnsupportedManager.notify(UNSUPPORTED_FEATURES.font);
-          translated = new ErrorFont(e instanceof Error ? e.message : e);
-        }
-        font.translated = translated;
+      font.translated = fontCapability.promise;
+
+      // TODO move promises into translate font
+      var translatedPromise;
+      try {
+        translatedPromise = Promise.resolve(
+          this.translateFont(preEvaluatedFont, xref));
+      } catch (e) {
+        translatedPromise = Promise.reject(e);
       }
 
-      var loadCharProcsPromise = Promise.resolve();
-      if (font.translated.loadCharProcs) {
-        var charProcs = font.get('CharProcs').getAll();
-        var fontResources = (font.get('Resources') || resources);
-        var charProcKeys = Object.keys(charProcs);
-        var charProcOperatorList = {};
-        for (var i = 0, n = charProcKeys.length; i < n; ++i) {
-          loadCharProcsPromise = loadCharProcsPromise.then(function (key) {
-            var glyphStream = charProcs[key];
-            var operatorList = new OperatorList();
-            return this.getOperatorList(glyphStream, fontResources,
-                                        operatorList).
-              then(function () {
-                charProcOperatorList[key] = operatorList.getIR();
-
-                // Add the dependencies to the parent operator list so they are
-                // resolved before sub operator list is executed synchronously.
-                if (parentOperatorList) {
-                  parentOperatorList.addDependencies(operatorList.dependencies);
-                }
-              });
-          }.bind(this, charProcKeys[i]));
-        }
-        loadCharProcsPromise = loadCharProcsPromise.then(function () {
-          font.translated.charProcOperatorList = charProcOperatorList;
-        });
-      }
-      return loadCharProcsPromise.then(function () {
-        font.loaded = true;
-        fontCapability.resolve(font);
-        return fontCapability.promise;
-      }, fontCapability.reject);
+      translatedPromise.then(function (translatedFont) {
+        fontCapability.resolve(new TranslatedFont(font.loadedName,
+          translatedFont, font));
+      }, function (reason) {
+        // TODO fontCapability.reject?
+        UnsupportedManager.notify(UNSUPPORTED_FEATURES.font);
+        fontCapability.resolve(new TranslatedFont(font.loadedName,
+          new ErrorFont(reason instanceof Error ? reason.message : reason),
+          font));
+      });
+      return fontCapability.promise;
     },
 
     buildPath: function PartialEvaluator_buildPath(operatorList, fn, args) {
@@ -572,6 +556,36 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         opArgs[0].push(fn);
         Array.prototype.push.apply(opArgs[1], args);
       }
+    },
+
+    handleColorN: function PartialEvaluator_handleColorN(operatorList, fn, args,
+          cs, patterns, resources, xref) {
+      // compile tiling patterns
+      var patternName = args[args.length - 1];
+      // SCN/scn applies patterns along with normal colors
+      var pattern;
+      if (isName(patternName) &&
+          (pattern = patterns.get(patternName.name))) {
+        var dict = (isStream(pattern) ? pattern.dict : pattern);
+        var typeNum = dict.get('PatternType');
+
+        if (typeNum == TILING_PATTERN) {
+          var color = cs.base ? cs.base.getRgb(args, 0) : null;
+          return this.handleTilingType(fn, color, resources, pattern,
+                                       dict, operatorList);
+        } else if (typeNum == SHADING_PATTERN) {
+          var shading = dict.get('Shading');
+          var matrix = dict.get('Matrix');
+          pattern = Pattern.parseShading(shading, matrix, xref, resources);
+          operatorList.addOp(fn, pattern.getIR());
+          return Promise.resolve();
+        } else {
+          return Promise.reject('Unknown PatternType: ' + typeNum);
+        }
+      }
+      // TODO shall we fail here?
+      operatorList.addOp(fn, args);
+      return Promise.resolve();
     },
 
     getOperatorList: function PartialEvaluator_getOperatorList(stream,
@@ -590,49 +604,17 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       var patterns = (resources.get('Pattern') || Dict.empty);
       var stateManager = new StateManager(initialState || new EvalState());
       var preprocessor = new EvaluatorPreprocessor(stream, xref, stateManager);
-      var shading;
       var timeSlotManager = new TimeSlotManager();
 
       return new Promise(function next(resolve, reject) {
         timeSlotManager.reset();
-        var stop, operation, i, ii;
+        var stop, operation, i, ii, cs;
         while (!(stop = timeSlotManager.check()) &&
                (operation = preprocessor.read())) {
           var args = operation.args;
           var fn = operation.fn;
 
           switch (fn | 0) {
-            case OPS.setStrokeColorN:
-            case OPS.setFillColorN:
-              if (args[args.length - 1].code) {
-                break;
-              }
-              // compile tiling patterns
-              var patternName = args[args.length - 1];
-              // SCN/scn applies patterns along with normal colors
-              var pattern;
-              if (isName(patternName) &&
-                  (pattern = patterns.get(patternName.name))) {
-                var dict = (isStream(pattern) ? pattern.dict : pattern);
-                var typeNum = dict.get('PatternType');
-
-                if (typeNum == TILING_PATTERN) {
-                  return self.handleTilingType(fn, args, resources, pattern,
-                                               dict, operatorList).then(
-                    function() {
-                      next(resolve, reject);
-                    }, reject);
-                } else if (typeNum == SHADING_PATTERN) {
-                  shading = dict.get('Shading');
-                  var matrix = dict.get('Matrix');
-                  pattern = Pattern.parseShading(shading, matrix, xref,
-                    resources);
-                  args = pattern.getIR();
-                } else {
-                  error('Unknown PatternType ' + typeNum);
-                }
-              }
-              break;
             case OPS.paintXObject:
               if (args[0].code) {
                 break;
@@ -653,7 +635,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                 assert(isName(type),
                   'XObject should have a Name subtype');
 
-                if ('Form' == type.name) {
+                if (type.name === 'Form') {
                   stateManager.save();
                   return self.buildFormXObject(resources, xobj, null,
                                                operatorList,
@@ -662,10 +644,15 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                       stateManager.restore();
                       next(resolve, reject);
                     }, reject);
-                } else if ('Image' == type.name) {
+                } else if (type.name === 'Image') {
                   self.buildPaintImageXObject(resources, xobj, false,
                     operatorList, name, imageCache);
                   args = [];
+                  continue;
+                } else if (type.name === 'PS') {
+                  // PostScript XObjects are unused when viewing documents.
+                  // See section 4.7.1 of Adobe's PDF reference.
+                  info('Ignored XObject subtype PS');
                   continue;
                 } else {
                   error('Unhandled XObject subtype ' + type.name);
@@ -698,34 +685,112 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               break;
             case OPS.showSpacedText:
               var arr = args[0];
+              var combinedGlyphs = [];
               var arrLength = arr.length;
               for (i = 0; i < arrLength; ++i) {
-                if (isString(arr[i])) {
-                  arr[i] = self.handleText(arr[i], stateManager.state);
+                var arrItem = arr[i];
+                if (isString(arrItem)) {
+                  Array.prototype.push.apply(combinedGlyphs,
+                    self.handleText(arrItem, stateManager.state));
+                } else if (isNum(arrItem)) {
+                  combinedGlyphs.push(arrItem);
                 }
               }
+              args[0] = combinedGlyphs;
+              fn = OPS.showText;
               break;
             case OPS.nextLineShowText:
+              operatorList.addOp(OPS.nextLine);
               args[0] = self.handleText(args[0], stateManager.state);
+              fn = OPS.showText;
               break;
             case OPS.nextLineSetSpacingShowText:
-              args[2] = self.handleText(args[2], stateManager.state);
+              operatorList.addOp(OPS.nextLine);
+              operatorList.addOp(OPS.setWordSpacing, [args.shift()]);
+              operatorList.addOp(OPS.setCharSpacing, [args.shift()]);
+              args[0] = self.handleText(args[0], stateManager.state);
+              fn = OPS.showText;
               break;
             case OPS.setTextRenderingMode:
               stateManager.state.textRenderingMode = args[0];
               break;
-            // Parse the ColorSpace data to a raw format.
+
             case OPS.setFillColorSpace:
+              stateManager.state.fillColorSpace =
+                ColorSpace.parse(args[0], xref, resources);
+              continue;
             case OPS.setStrokeColorSpace:
-              args = [ColorSpace.parseToIR(args[0], xref, resources)];
+              stateManager.state.strokeColorSpace =
+                ColorSpace.parse(args[0], xref, resources);
+              continue;
+            case OPS.setFillColor:
+              cs = stateManager.state.fillColorSpace;
+              args = cs.getRgb(args, 0);
+              fn = OPS.setFillRGBColor;
               break;
+            case OPS.setStrokeColor:
+              cs = stateManager.state.strokeColorSpace;
+              args = cs.getRgb(args, 0);
+              fn = OPS.setStrokeRGBColor;
+              break;
+            case OPS.setFillGray:
+              stateManager.state.fillColorSpace = ColorSpace.singletons.gray;
+              args = ColorSpace.singletons.gray.getRgb(args, 0);
+              fn = OPS.setFillRGBColor;
+              break;
+            case OPS.setStrokeGray:
+              stateManager.state.strokeColorSpace = ColorSpace.singletons.gray;
+              args = ColorSpace.singletons.gray.getRgb(args, 0);
+              fn = OPS.setStrokeRGBColor;
+              break;
+            case OPS.setFillCMYKColor:
+              stateManager.state.fillColorSpace = ColorSpace.singletons.cmyk;
+              args = ColorSpace.singletons.cmyk.getRgb(args, 0);
+              fn = OPS.setFillRGBColor;
+              break;
+            case OPS.setStrokeCMYKColor:
+              stateManager.state.strokeColorSpace = ColorSpace.singletons.cmyk;
+              args = ColorSpace.singletons.cmyk.getRgb(args, 0);
+              fn = OPS.setStrokeRGBColor;
+              break;
+            case OPS.setFillRGBColor:
+              stateManager.state.fillColorSpace = ColorSpace.singletons.rgb;
+              args = ColorSpace.singletons.rgb.getRgb(args, 0);
+              break;
+            case OPS.setStrokeRGBColor:
+              stateManager.state.strokeColorSpace = ColorSpace.singletons.rgb;
+              args = ColorSpace.singletons.rgb.getRgb(args, 0);
+              break;
+            case OPS.setFillColorN:
+              cs = stateManager.state.fillColorSpace;
+              if (cs.name === 'Pattern') {
+                return self.handleColorN(operatorList, OPS.setFillColorN,
+                  args, cs, patterns, resources, xref).then(function() {
+                    next(resolve, reject);
+                  }, reject);
+              }
+              args = cs.getRgb(args, 0);
+              fn = OPS.setFillRGBColor;
+              break;
+            case OPS.setStrokeColorN:
+              cs = stateManager.state.strokeColorSpace;
+              if (cs.name === 'Pattern') {
+                return self.handleColorN(operatorList, OPS.setStrokeColorN,
+                  args, cs, patterns, resources, xref).then(function() {
+                    next(resolve, reject);
+                  }, reject);
+              }
+              args = cs.getRgb(args, 0);
+              fn = OPS.setStrokeRGBColor;
+              break;
+
             case OPS.shadingFill:
               var shadingRes = resources.get('Shading');
               if (!shadingRes) {
                 error('No shading resource found');
               }
 
-              shading = shadingRes.get(args[0].name);
+              var shading = shadingRes.get(args[0].name);
               if (!shading) {
                 error('No shading object found');
               }
@@ -830,11 +895,10 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       }
 
       function handleSetFont(fontName, fontRef) {
-        return self.loadFont(fontName, fontRef, xref, resources, null).
-          then(function (font) {
-            var fontTranslated = textState.font = font.translated;
-            textState.fontMatrix = fontTranslated.fontMatrix ?
-              fontTranslated.fontMatrix :
+        return self.loadFont(fontName, fontRef, xref, resources).
+          then(function (translated) {
+            textState.font = translated.font;
+            textState.fontMatrix = translated.font.fontMatrix ||
               FONT_IDENTITY_MATRIX;
           });
       }
@@ -1609,7 +1673,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       this.extractWidths(dict, xref, descriptor, properties);
 
       if (type.name === 'Type3') {
-        properties.coded = true;
+        properties.isType3Font = true;
       }
 
       return new Font(fontName.name, fontFile, properties);
@@ -1617,6 +1681,64 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
   };
 
   return PartialEvaluator;
+})();
+
+var TranslatedFont = (function TranslatedFontClosure() {
+  function TranslatedFont(loadedName, font, dict) {
+    this.loadedName = loadedName;
+    this.font = font;
+    this.dict = dict;
+    this.type3Loaded = null;
+    this.sent = false;
+  }
+  TranslatedFont.prototype = {
+    send: function (handler) {
+      if (this.sent) {
+        return;
+      }
+      var fontData = this.font.exportData();
+      handler.send('commonobj', [
+        this.loadedName,
+        'Font',
+        fontData
+      ]);
+      this.sent = true;
+    },
+    loadType3Data: function (evaluator, resources, parentOperatorList) {
+      assert(this.font.isType3Font);
+
+      if (this.type3Loaded) {
+        return this.type3Loaded;
+      }
+
+      var translatedFont = this.font;
+      var loadCharProcsPromise = Promise.resolve();
+      var charProcs = this.dict.get('CharProcs').getAll();
+      var fontResources = this.dict.get('Resources') || resources;
+      var charProcKeys = Object.keys(charProcs);
+      var charProcOperatorList = {};
+      for (var i = 0, n = charProcKeys.length; i < n; ++i) {
+        loadCharProcsPromise = loadCharProcsPromise.then(function (key) {
+          var glyphStream = charProcs[key];
+          var operatorList = new OperatorList();
+          return evaluator.getOperatorList(glyphStream, fontResources,
+            operatorList).
+            then(function () {
+              charProcOperatorList[key] = operatorList.getIR();
+
+              // Add the dependencies to the parent operator list so they are
+              // resolved before sub operator list is executed synchronously.
+              parentOperatorList.addDependencies(operatorList.dependencies);
+            });
+        }.bind(this, charProcKeys[i]));
+      }
+      this.type3Loaded = loadCharProcsPromise.then(function () {
+        translatedFont.charProcOperatorList = charProcOperatorList;
+      });
+      return this.type3Loaded;
+    }
+  };
+  return TranslatedFont;
 })();
 
 var OperatorList = (function OperatorListClosure() {
@@ -1805,6 +1927,8 @@ var EvalState = (function EvalStateClosure() {
     this.ctm = new Float32Array(IDENTITY_MATRIX);
     this.font = null;
     this.textRenderingMode = TextRenderingMode.FILL;
+    this.fillColorSpace = ColorSpace.singletons.gray;
+    this.strokeColorSpace = ColorSpace.singletons.gray;
   }
   EvalState.prototype = {
     clone: function CanvasExtraState_clone() {

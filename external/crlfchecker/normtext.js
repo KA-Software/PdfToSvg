@@ -1,6 +1,6 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
-/* Copyright 2013 Mozilla Foundation
+/* Copyright 2012 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals */
+/* jshint node:true */
 
 'use strict';
 
-var DEFAULT_PREFERENCES = {
-  showPreviousViewOnLoad: true,
-  defaultZoomValue: '',
-  sidebarViewOnLoad: 0,
-  enableHandToolOnLoad: false,
-  enableWebGL: false,
-  disableRange: false,
-  disableAutoFetch: false,
-  disableFontFace: false,
-//#if B2G
-//disableTextLayer: true,
-//useOnlyCssZoom: true
-//#else
-  disableTextLayer: false,
-  useOnlyCssZoom: false
-//#endif
-};
+var fs = require('fs');
+
+function normalizeText(s) {
+ return s.replace(/\r\n?/g, '\n').replace(/\uFEFF/g, '');
+}
+
+var args = process.argv.slice(2);
+
+args.forEach(function (file) {
+  var content = fs.readFileSync(file, 'utf8');
+  content = normalizeText(content);
+  fs.writeFileSync(file, content, 'utf8');
+});

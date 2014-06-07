@@ -20,7 +20,7 @@
            Preferences, SidebarView, ViewHistory, PageView, ThumbnailView, URL,
            noContextMenuHandler, SecondaryToolbar, PasswordPrompt,
            PresentationMode, HandTool, Promise, DocumentProperties,
-           DocumentOutlineView, DocumentAttachmentsView */
+           DocumentOutlineView, DocumentAttachmentsView, OverlayManager */
 
 'use strict';
 
@@ -39,11 +39,10 @@ var VIEW_HISTORY_MEMORY = 20;
 var SCALE_SELECT_CONTAINER_PADDING = 8;
 var SCALE_SELECT_PADDING = 22;
 var THUMBNAIL_SCROLL_MARGIN = -19;
-var USE_ONLY_CSS_ZOOM = false;
 var CLEANUP_TIMEOUT = 30000;
 var IGNORE_CURRENT_POSITION_ON_ZOOM = false;
 //#if B2G
-//USE_ONLY_CSS_ZOOM = true;
+//PDFJS.useOnlyCssZoom = true;
 //PDFJS.disableTextLayer = true;
 //#endif
 var RenderingStates = {
@@ -100,9 +99,10 @@ var currentPageNumber = 1;
 //#include pdf_find_controller.js
 //#include pdf_history.js
 //#include secondary_toolbar.js
-//#include password_prompt.js
 //#include presentation_mode.js
 //#include hand_tool.js
+//#include overlay_manager.js
+//#include password_prompt.js
 //#include document_properties.js
 
 var PDFView = {
@@ -183,14 +183,6 @@ var PDFView = {
       documentPropertiesButton: document.getElementById('documentProperties')
     });
 
-    PasswordPrompt.initialize({
-      overlayContainer: document.getElementById('overlayContainer'),
-      passwordField: document.getElementById('password'),
-      passwordText: document.getElementById('passwordText'),
-      passwordSubmit: document.getElementById('passwordSubmit'),
-      passwordCancel: document.getElementById('passwordCancel')
-    });
-
     PresentationMode.initialize({
       container: container,
       secondaryToolbar: SecondaryToolbar,
@@ -200,8 +192,16 @@ var PDFView = {
       pageRotateCcw: document.getElementById('contextPageRotateCcw')
     });
 
+    PasswordPrompt.initialize({
+      overlayName: 'passwordOverlay',
+      passwordField: document.getElementById('password'),
+      passwordText: document.getElementById('passwordText'),
+      passwordSubmit: document.getElementById('passwordSubmit'),
+      passwordCancel: document.getElementById('passwordCancel')
+    });
+
     DocumentProperties.initialize({
-      overlayContainer: document.getElementById('overlayContainer'),
+      overlayName: 'documentPropertiesOverlay',
       closeButton: document.getElementById('documentPropertiesClose'),
       fileNameField: document.getElementById('fileNameField'),
       fileSizeField: document.getElementById('fileSizeField'),
@@ -224,12 +224,27 @@ var PDFView = {
     var initializedPromise = Promise.all([
       Preferences.get('enableWebGL').then(function resolved(value) {
         PDFJS.disableWebGL = !value;
-      }, function rejected(reason) {}),
+      }),
       Preferences.get('sidebarViewOnLoad').then(function resolved(value) {
         self.preferenceSidebarViewOnLoad = value;
-      }, function rejected(reason) {})
+      }),
+      Preferences.get('disableTextLayer').then(function resolved(value) {
+        PDFJS.disableTextLayer = value;
+      }),
+      Preferences.get('disableRange').then(function resolved(value) {
+        PDFJS.disableRange = value;
+      }),
+      Preferences.get('disableAutoFetch').then(function resolved(value) {
+        PDFJS.disableAutoFetch = value;
+      }),
+      Preferences.get('disableFontFace').then(function resolved(value) {
+        PDFJS.disableFontFace = value;
+      }),
+      Preferences.get('useOnlyCssZoom').then(function resolved(value) {
+        PDFJS.useOnlyCssZoom = value;
+      })
       // TODO move more preferences and other async stuff here
-    ]);
+    ]).catch(function (reason) { });
 
     return initializedPromise.then(function () {
       PDFView.initialized = true;
@@ -626,7 +641,7 @@ var PDFView = {
     var passwordNeeded = function passwordNeeded(updatePassword, reason) {
       PasswordPrompt.updatePassword = updatePassword;
       PasswordPrompt.reason = reason;
-      PasswordPrompt.show();
+      PasswordPrompt.open();
     };
 
     function getDocumentProgress(progressData) {
@@ -1726,7 +1741,7 @@ function webViewerInitialized() {
   }
 
   if ('useOnlyCssZoom' in hashParams) {
-    USE_ONLY_CSS_ZOOM = (hashParams['useOnlyCssZoom'] === 'true');
+    PDFJS.useOnlyCssZoom = (hashParams['useOnlyCssZoom'] === 'true');
   }
 
   if ('verbosity' in hashParams) {
@@ -1983,6 +1998,8 @@ function updateViewarea() {
       'zoom': normalizedScaleValue,
       'scrollLeft': intLeft,
       'scrollTop': intTop
+    }).catch(function() {
+      // unable to write to storage
     });
   });
   var href = PDFView.getAnchorUrl(pdfOpenParams);
@@ -2163,7 +2180,7 @@ window.addEventListener('click', function click(evt) {
 }, false);
 
 window.addEventListener('keydown', function keydown(evt) {
-  if (PasswordPrompt.visible) {
+  if (OverlayManager.active) {
     return;
   }
 
