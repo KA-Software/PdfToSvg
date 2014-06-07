@@ -114,15 +114,15 @@ var Dict = (function DictClosure() {
     getAsync: function Dict_getAsync(key1, key2, key3) {
       var value;
       var xref = this.xref;
-      if (typeof (value = this.map[key1]) !== undefined || key1 in this.map ||
-          typeof key2 === undefined) {
+      if (typeof (value = this.map[key1]) !== 'undefined' || key1 in this.map ||
+          typeof key2 === 'undefined') {
         if (xref) {
           return xref.fetchIfRefAsync(value);
         }
         return Promise.resolve(value);
       }
-      if (typeof (value = this.map[key2]) !== undefined || key2 in this.map ||
-          typeof key3 === undefined) {
+      if (typeof (value = this.map[key2]) !== 'undefined' || key2 in this.map ||
+          typeof key3 === 'undefined') {
         if (xref) {
           return xref.fetchIfRefAsync(value);
         }
@@ -503,6 +503,22 @@ var Catalog = (function CatalogClosure() {
           javaScript.push(stringToPDFString(js));
         }
       }
+
+      // Append OpenAction actions to javaScript array
+      var openactionDict = this.catDict.get('OpenAction');
+      if (isDict(openactionDict)) {
+        var objType = openactionDict.get('Type');
+        var actionType = openactionDict.get('S');
+        var action = openactionDict.get('N');
+        var isPrintAction = (isName(objType) && objType.name === 'Action' &&
+                            isName(actionType) && actionType.name === 'Named' &&
+                            isName(action) && action.name === 'Print');
+        
+        if (isPrintAction) {
+          javaScript.push('print(true);');
+        }
+      }
+
       return shadow(this, 'javaScript', javaScript);
     },
 
