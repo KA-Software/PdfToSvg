@@ -5,7 +5,3 @@
         <em:description>HTML5 per veure documents</em:description>
       </Description>
     </em:localized>
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
