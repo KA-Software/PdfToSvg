@@ -602,8 +602,10 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
         function operatorListChanged() {
           if (intentState.operatorList.lastChunk) {
             console.log(intentState.operatorList);
-            svgGfx.beginDrawing(renderContext.viewport);
-            svgGfx.loadDependencies(intentState.operatorList);
+            svgGfx.loadDependencies(intentState.operatorList).then(function(values) {
+              console.log('All dependencies loaded');
+              svgGfx.beginDrawing(renderContext.viewport, renderContext.pageNum, renderContext.container, intentState.operatorList);
+            });
             resolve(intentState.operatorList);
           }
         }

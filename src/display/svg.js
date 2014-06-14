@@ -217,7 +217,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.moveText(0, this.current.leading);
     },
 
-    beginDrawing: function SVGGraphics_beginDrawing(viewport) {
+    beginDrawing: function SVGGraphics_beginDrawing(viewport, pageNum, container, operatorList) {
       console.log("begin drawing svg")
       this.svg = createScratchSVG(viewport.width, viewport.height);
       this.NS = "http://www.w3.org/2000/svg";
@@ -232,6 +232,8 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.pgrp.appendChild(this.tgrp);
       this.svg.appendChild(this.pgrp);
       this.container.appendChild(this.svg);
+      this.convertOpList(operatorList);
+
     },
 
     convertOpList: function SVGGraphics_convertOpList(operatorList) {
@@ -349,7 +351,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
             this.group(opTree[x].items);
             break;
           default:
-            console.log(fn);
+            console.log(fn)
             //console.error('Unimplemented Method');
         }
       }
@@ -379,9 +381,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
           }
         }
       }
-      Promise.all(this.current.dependencies).then(function (values) {
-        this.convertOpList(operatorList);
-      });
+      return Promise.all(this.current.dependencies);
     },
 
     constructPath: function SVGGraphics_constructPath(ops, args) {
@@ -730,6 +730,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
 
     },
 
+   
     setLeadingMoveText: function SVGGraphics_setLeadingMoveText(x, y) {
       this.setLeading(-y);
       this.moveText(x, y);
