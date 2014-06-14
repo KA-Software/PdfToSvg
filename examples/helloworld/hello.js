@@ -10,7 +10,7 @@
 //
 // Fetch the PDF document from the URL using promises
 //
-PDFJS.getDocument('../../test/pdfs/ocs.pdf').then(function(pdf) {
+PDFJS.getDocument('tracemonkey.pdf').then(function(pdf) {
   // Using promise to fetch the page
   pdf.getPage(1).then(function(page) {
     var scale = 2.0;
