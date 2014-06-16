@@ -130,10 +130,16 @@ describe('api', function() {
     it('gets ref', function() {
       expect(page.ref).toEqual({num: 15, gen: 0});
     });
+
+    it('gets operator list', function() {
+      var promise = page.getOperatorList();
+      waitsForPromise(promise, function (oplist) {
+        expect(!!oplist).toEqual(true);
+      });
+    });
     // TODO rotate
     // TODO viewport
     // TODO annotaions
     // TOOD text content
-    // TODO operation list
   });
 });

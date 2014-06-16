@@ -141,7 +141,7 @@ PDFJS.verbosity = (PDFJS.verbosity === undefined ?
                    PDFJS.VERBOSITY_LEVELS.warnings : PDFJS.verbosity);
 
 /**
- * The maximum supported canvas size in total pixels e.g. width * height. 
+ * The maximum supported canvas size in total pixels e.g. width * height.
  * The default value is 4096 * 4096. Use -1 for no limit.
  * @var {number}
  */
@@ -554,6 +554,55 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
 
       return renderTask;
     },
+
+    getOperatorList: function PDFPageProxy_getOperatorList() {
+      return new Promise(function (resolve, reject) {
+        var renderingIntent = 'oplist';
+
+        if (!this.intentStates[renderingIntent]) {
+          this.intentStates[renderingIntent] = {};
+        }
+        var intentState = this.intentStates[renderingIntent];
+        var opListTask = {};
+        opListTask.operatorListChanged = operatorListChanged;
+
+        if (!intentState.displayReadyCapability) {
+          intentState.receivingOperatorList = true;
+          intentState.displayReadyCapability = createPromiseCapability();
+          intentState.renderTasks = [];
+          intentState.renderTasks.push(opListTask);
+          intentState.operatorList = {
+            fnArray: [],
+            argsArray: [],
+            lastChunk: false
+          };
+
+          this.transport.messageHandler.send('RenderPageRequest', {
+            pageIndex: this.pageNumber - 1,
+            intent: renderingIntent
+          });
+        }
+
+        intentState.displayReadyCapability.promise.then(
+          function opListCapabilityResolve() {
+            if (intentState.operatorList.lastChunk) {
+              resolve(intentState.operatorList);
+            } else {
+              opListTask.operatorListChanged();
+            }
+          },
+          function opListCapabilityReject(reason) {
+            reject(reason);
+          });
+
+        function operatorListChanged() {
+          if (intentState.operatorList.lastChunk) {
+            resolve(intentState.operatorList);
+          }
+        }
+      }.bind(this));
+    },
+
     /**
      * @return {Promise} That is resolved a {@link TextContent}
      * object that represent the page text content.
