@@ -141,7 +141,7 @@ PDFJS.verbosity = (PDFJS.verbosity === undefined ?
                    PDFJS.VERBOSITY_LEVELS.warnings : PDFJS.verbosity);
 
 /**
- * The maximum supported canvas size in total pixels e.g. width * height. 
+ * The maximum supported canvas size in total pixels e.g. width * height.
  * The default value is 4096 * 4096. Use -1 for no limit.
  * @var {number}
  */
@@ -519,7 +519,6 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
       var self = this;
       intentState.displayReadyCapability.promise.then(
         function pageDisplayReadyPromise(transparency) {
-          console.log(intentState.operatorList);
           if (self.pendingDestroy) {
             complete();
             return;
@@ -556,24 +555,22 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
       return renderTask;
     },
 
-    renderSVG: function PDFPageProxy_getOpList(renderContext) {
+    getOperatorList: function PDFPageProxy_getOperatorList() {
       return new Promise(function (resolve, reject) {
-        var renderingIntent = 'svg';
+        var renderingIntent = 'oplist';
 
         if (!this.intentStates[renderingIntent]) {
           this.intentStates[renderingIntent] = {};
         }
         var intentState = this.intentStates[renderingIntent];
-        var svgTask = {};
-
-        var svgGfx = new SVGGraphics(this.commonObjs);
-        svgTask.operatorListChanged = operatorListChanged;
+        var opListTask = {};
+        opListTask.operatorListChanged = operatorListChanged;
 
         if (!intentState.displayReadyCapability) {
           intentState.receivingOperatorList = true;
           intentState.displayReadyCapability = createPromiseCapability();
           intentState.renderTasks = [];
-          intentState.renderTasks.push(svgTask);
+          intentState.renderTasks.push(opListTask);
           intentState.operatorList = {
             fnArray: [],
             argsArray: [],
@@ -587,12 +584,11 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
         }
 
         intentState.displayReadyCapability.promise.then(
-          function opListCapabilityReady() {
+          function opListCapabilityResolve() {
             if (intentState.operatorList.lastChunk) {
               resolve(intentState.operatorList);
-              console.log(intentState.operatorList);
             } else {
-              svgTask.operatorListChanged();
+              opListTask.operatorListChanged();
             }
           },
           function opListCapabilityReject(reason) {
@@ -601,11 +597,6 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
 
         function operatorListChanged() {
           if (intentState.operatorList.lastChunk) {
-            console.log(intentState.operatorList);
-            svgGfx.loadDependencies(intentState.operatorList).then(function(values) {
-              console.log('All dependencies loaded');
-              svgGfx.beginDrawing(renderContext.viewport, renderContext.pageNum, renderContext.container, intentState.operatorList);
-            });
             resolve(intentState.operatorList);
           }
         }
