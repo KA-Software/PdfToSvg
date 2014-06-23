@@ -975,7 +975,8 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       var ctx = this.ctx;
       var current = this.current;
       var x = current.x, y = current.y;
-      for (var i = 0, j = 0, ii = ops.length; i < ii; i++) {
+      var opLength = ops.length;
+      for (var i = 0, j = 0; i < opLength; i++) {
         switch (ops[i] | 0) {
           case OPS.rectangle:
             x = args[j++];

@@ -533,6 +533,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
             y = args[j++];
             var width = args[j++];
             var height = args[j++];
+<<<<<<< HEAD
             var xw = x + width;
             var yh = y + height;
             d += 'M' + x + ' ' + y + 'L' + xw + ' ' + y +
