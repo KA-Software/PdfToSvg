@@ -300,6 +300,9 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
           case OPS.fillStroke:
             this.fillStroke();
             break;
+          case OPS.paintSolidColorImageMask:
+            this.paintSolidColorImageMask();
+            break;
           case OPS.closePath:
             this.closePath();
             break;
@@ -662,26 +665,16 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.fillStroke();
     },
 
-    rectangle: function SVGGraphics_rectangle(x, y, width, height) {
-      var current = this.current;
-      if (width < 0) {
-        x = x + width;
-        width = -width;
-      }
-      if (height < 0) {
-        y = y + height;
-        height = -height;
-      }
-      current.rect = document.createElementNS(NS, 'svg:rect');
-      current.rect.setAttributeNS(null, 'x', x);
-      current.rect.setAttributeNS(null, 'y', y);
-      current.rect.setAttributeNS(null, 'fill', 'none');
-      current.rect.setAttributeNS(null, 'width', width);
-      current.rect.setAttributeNS(null, 'height', height);
-      current.rect.setAttributeNS(null, 'stroke-width', current.lineWidth);
-      // Saving a reference in current.element so that it can be addressed
-      // in 'fill' or 'stroke'
-      current.element = current.rect;
+    paintSolidColorImageMask:
+      function SVGGraphics_paintSolidColorImageMask() {
+        var current = this.current;
+        var rect = document.createElementNS(NS, 'svg:rect');
+        rect.setAttributeNS(null, 'x', 0);
+        rect.setAttributeNS(null, 'y', 0);
+        rect.setAttributeNS(null, 'width', 1);
+        rect.setAttributeNS(null, 'height', 1);
+        rect.setAttributeNS(null, 'fill', current.fillColor);
+        this.tgrp.appendChild(rect);
     },
   };
   return SVGGraphics;
