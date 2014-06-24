@@ -303,6 +303,9 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
           case OPS.paintSolidColorImageMask:
             this.paintSolidColorImageMask();
             break;
+          case OPS.paintJpegXObject:
+            this.paintJpegXObject();
+            break;
           case OPS.closePath:
             this.closePath();
             break;
@@ -675,6 +678,20 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
         rect.setAttributeNS(null, 'height', 1);
         rect.setAttributeNS(null, 'fill', current.fillColor);
         this.tgrp.appendChild(rect);
+    },
+
+    paintJpegXObject:
+     function SVGGraphics_paintJpegXObject(objId, w, h) {
+       var current = this.current;
+       var imgObj = this.objs.get(objId);
+       var imgEl = document.createElementNS(NS, 'svg:image');
+       imgEl.setAttributeNS(XLINK_NS, 'href', imgObj.src);
+       imgEl.setAttributeNS(null, 'width', imgObj.width);
+       imgEl.setAttributeNS(null, 'height', imgObj.height);
+       imgEl.setAttributeNS(null, 'x', 0);
+       imgEl.setAttributeNS(null, 'y', -h);
+       imgEl.setAttributeNS(null, 'transform', 'scale(' + 1 / w + ' ' + -1 / h + ')');
+       this.tgrp.appendChild(imgEl);
     },
   };
   return SVGGraphics;
