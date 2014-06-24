@@ -30,6 +30,23 @@ function createScratchSVG(width, height) {
   return svg;
 }
 
+function currentInverseTransform(matrix) {
+  var m = matrix;
+  var a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5];
+
+  var ad_bc = a * d - b * c;
+  var bc_ad = b * c - a * d;
+
+  return [
+    d / ad_bc,
+    b / bc_ad,
+    c / bc_ad,
+    a / ad_bc,
+    (d * e - c * f) / bc_ad,
+    (b * e - a * f) / ad_bc
+  ];
+}
+
 var SVGExtraState = (function SVGExtraStateClosure() {
   function SVGExtraState(old) {
     // Are soft masks and alpha values shapes or opacities?
