@@ -122,6 +122,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
   var LINE_JOIN_STYLES = ['miter', 'round', 'bevel'];
   var NORMAL_CLIP = {};
   var EO_CLIP = {};
+  var clipCount = 0;
 
   SVGGraphics.prototype = {
     save: function SVGGraphics_save() {
@@ -306,6 +307,12 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
             break;
           case OPS.fillStroke:
             this.fillStroke();
+            break;
+          case OPS.clip:
+            this.clip();
+            break;
+          case OPS.eoClip:
+            this.eoClip();
             break;
           case OPS.paintSolidColorImageMask:
             this.paintSolidColorImageMask();
@@ -585,6 +592,31 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       // in 'fill' and 'stroke'
       current.element = current.path;
       current.setCurrentPoint(x, y);
+    },
+
+    clip: function SVGGraphics_clip(evenodd) {
+      // Add current path to clipping path
+      var clipId = 'clippath' + clipCount;
+      clipCount++;
+      this.clippath = document.createElementNS(NS, 'svg:clipPath');
+      this.clippath.setAttributeNS(null, 'id', clipId);
+      this.clippath.appendChild(this.current.element);
+      this.tgrp.appendChild(this.clippath);
+      this.pgrp.appendChild(this.tgrp);
+
+      // Create a new group with that clippath attribute
+      this.tgrp = document.createElementNS(NS, 'svg:g');
+      this.tgrp.setAttributeNS(null, 'transform',
+          'matrix(' + this.transformMatrix + ')');
+      this.tgrp.setAttributeNS(null, 'clip-path', 'url(#' + clipId + ')');
+      if (evenodd) {
+        this.tgrp.setAttributeNS(null, 'clip-rule', evenodd);
+      }
+      this.pgrp.appendChild(this.tgrp);
+    },
+
+    eoClip: function SVGGraphics_clip() {
+      this.clip('evenodd');
     },
 
     closePath: function SVGGraphics_closePath() {
