@@ -455,6 +455,8 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.tspan.setAttributeNS(null, 'x', current.xcoords.join(' '));
       current.tspan.setAttributeNS(null, 'font-family', current.fontFamily);
       current.tspan.setAttributeNS(null, 'font-size', current.fontSize + 'px');
+      current.tspan.setAttributeNS(null, 'stroke', 'none');
+      current.tspan.setAttributeNS(null, 'fill', current.fillColor);
 
       current.txtElement.setAttributeNS(null, 'transform',
         'matrix(' + current.textMatrix + ') scale(1, -1)' );
