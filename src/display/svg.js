@@ -35,6 +35,9 @@ var SVGExtraState = (function SVGExtraStateClosure() {
     // Are soft masks and alpha values shapes or opacities?
     this.fontSize = 0;
     this.fontSizeScale = 1;
+    this.fontWeight = 'normal';
+    this.fontSize = 'normal';
+
     this.textMatrix = IDENTITY_MATRIX;
     this.fontMatrix = FONT_IDENTITY_MATRIX;
     this.leading = 0;
@@ -450,8 +453,11 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       }
 
       current.tspan.setAttributeNS(null, 'x', current.xcoords.join(' '));
+      current.tspan.setAttributeNS(null, 'y', -current.y);
       current.tspan.setAttributeNS(null, 'font-family', current.fontFamily);
       current.tspan.setAttributeNS(null, 'font-size', current.fontSize + 'px');
+      current.tspan.setAttributeNS(null, 'font-style', current.fontStyle);
+      current.tspan.setAttributeNS(null, 'font-weight', current.fontWeight);
       current.tspan.setAttributeNS(null, 'stroke', 'none');
       current.tspan.setAttributeNS(null, 'fill', current.fillColor);
 
@@ -484,10 +490,6 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
 
       var italic = fontObj.italic ? 'italic' : 'normal';
 
-      current.font.style = (bold == 'normal' ?
-                             (italic == 'normal' ?
-                              '' : 'font-weight:' + italic) :
-                                'font-weight:' + bold);
 
       if (size < 0) {
         size = -size;
@@ -497,6 +499,12 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       }
       current.fontSize = size;
       current.fontFamily = fontObj.loadedName;
+      current.fontWeight = bold;
+      current.fontStyle = italic;
+ 
+      current.tspan = document.createElementNS(NS, 'svg:tspan');
+      current.tspan.setAttributeNS(null, 'y', -current.y);
+      current.xcoords = [];
     },
 
     endText: function SVGGraphics_endText(args) {
@@ -523,6 +531,8 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
     setFillRGBColor: function SVGGraphics_setFillRGBColor(r, g, b) {
       var color = Util.makeCssRgb(arguments);
       this.current.fillColor = color;
+      this.current.tspan = document.createElementNS(NS, 'svg:tspan');
+      this.current.xcoords = [];
     },
     setDash: function SVGGraphics_setDash(dashArray, dashPhase) {
       this.current.dashArray = dashArray;
@@ -703,6 +713,8 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
     },
 
     fillStroke: function SVGGraphics_fillStroke() {
+      //Order important. Since, stroke wants fill to be none.
+      // First stroke, then if fill needed, it will be overwritten.
       this.stroke();
       this.fill();
     },
