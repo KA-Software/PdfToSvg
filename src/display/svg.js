@@ -297,7 +297,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
             this.setDash(args[0], args[1]);
             break;
           case OPS.setGState:
-            this.setGState(args);
+            this.setGState(args[0]);
             break;
           case OPS.fill:
             this.fill();
@@ -677,7 +677,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
           case 'FL':
             break;
           case 'Font':
-            this.setFont(value[0], value[1]);
+            this.setFont(value);
             break;
           case 'CA':
             break;
