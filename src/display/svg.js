@@ -593,6 +593,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.path.setAttributeNS(null, 'stroke-miterlimit',
        current.miterLimit);
       current.path.setAttributeNS(null, 'stroke-linecap', current.lineCap);
+      current.path.setAttributeNS(null, 'stroke-linejoin', current.lineJoin);
       current.path.setAttributeNS(null, 'stroke-width',
        current.lineWidth + 'px');
       current.path.setAttributeNS(null, 'stroke-dasharray', current.dashArray);
