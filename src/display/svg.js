@@ -703,8 +703,8 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
     },
 
     fillStroke: function SVGGraphics_fillStroke() {
-      this.fill();
       this.stroke();
+      this.fill();
     },
 
     closeStroke: function SVGGraphics_closeStroke() {
