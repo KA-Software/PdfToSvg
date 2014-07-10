@@ -719,8 +719,10 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
     },
 
     fillStroke: function SVGGraphics_fillStroke() {
-      this.fill();
+      // Order is important since stroke wants fill to be none.
+      // First stroke, then if fill needed, it will be overwritten.
       this.stroke();
+      this.fill();
     },
 
     closeStroke: function SVGGraphics_closeStroke() {
