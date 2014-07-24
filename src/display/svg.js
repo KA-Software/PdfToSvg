@@ -25,8 +25,7 @@ function createScratchSVG(width, height) {
   svg.setAttributeNS(null, 'version', '1.1');
   svg.setAttributeNS(null, 'width', width + 'px');
   svg.setAttributeNS(null, 'height', height + 'px');
-  svg.setAttributeNS(null, 'viewBox', '0 ' + (-height) + ' ' +
-    width + ' ' + height);
+  svg.setAttributeNS(null, 'viewBox', '0 0 ' + width + ' ' + height);
   return svg;
 }
 
@@ -204,8 +203,8 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.viewport = viewport;
       this.transformMatrix = IDENTITY_MATRIX;
       this.pgrp = document.createElementNS(NS, 'svg:g'); // Parent group
-      this.pgrp.setAttributeNS(null, 'transform', 'scale(' + viewport.scale +
-        ',' + -viewport.scale + ')');
+      this.pgrp.setAttributeNS(null, 'transform',
+        'matrix(' + viewport.transform +')');
       this.tgrp = document.createElementNS(NS, 'svg:g'); // Transform group
       this.tgrp.setAttributeNS(null, 'transform',
         'matrix(' + this.transformMatrix +')');
