@@ -318,6 +318,9 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
           case OPS.fillStroke:
             this.fillStroke();
             break;
+          case OPS.eoFillStroke:
+            this.eoFillStroke();
+            break;
           case OPS.clip:
             this.clip('nonzero');
             break;
@@ -723,6 +726,11 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       // First stroke, then if fill needed, it will be overwritten.
       this.stroke();
       this.fill();
+    },
+
+    eoFillStroke: function SVGGraphics_eoFillStroke() {
+      this.current.element.setAttributeNS(null, 'fill-rule', 'evenodd');
+      this.fillStroke();
     },
 
     closeStroke: function SVGGraphics_closeStroke() {
