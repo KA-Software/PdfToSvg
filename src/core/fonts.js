@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals assert, bytesToString, CIDToUnicodeMaps, error, ExpertCharset,
-           ExpertSubsetCharset, FileReaderSync, GlyphsUnicode, info, isArray,
-           isNum, ISOAdobeCharset, Stream, stringToArray, stringToBytes,
-           string32, TextDecoder, warn, Lexer, Util, FONT_IDENTITY_MATRIX,
-           FontRendererFactory, shadow, isString, IdentityCMap, Name,
-           CMapFactory, PDFJS, readUint32, FontType */
+/* globals FONT_IDENTITY_MATRIX, FontType, warn, GlyphsUnicode, error, string32,
+           readUint32, stringToArray, Stream, FontRendererFactory, shadow,
+           bytesToString, info, assert, IdentityCMap, Name, CMapFactory, PDFJS,
+           isNum, Lexer, isArray, ISOAdobeCharset, ExpertCharset,
+           ExpertSubsetCharset, Util */
 
 'use strict';
 
@@ -2473,6 +2472,7 @@ var Font = (function FontClosure() {
     var toUnicode = properties.toUnicode;
     var isSymbolic = !!(properties.flags & FontFlags.Symbolic);
     var isIdentityUnicode = properties.isIdentityUnicode;
+    var isCidFontType2 = (properties.type === 'CIDFontType2');
     var newMap = Object.create(null);
     var toFontChar = [];
     var usedFontCharCodes = [];
@@ -2483,11 +2483,17 @@ var Font = (function FontClosure() {
       var fontCharCode = originalCharCode;
       // First try to map the value to a unicode position if a non identity map
       // was created.
-      if (!isIdentityUnicode && originalCharCode in toUnicode) {
-        var unicode = toUnicode[fontCharCode];
-        // TODO: Try to map ligatures to the correct spot.
-        if (unicode.length === 1) {
-          fontCharCode = unicode.charCodeAt(0);
+      if (!isIdentityUnicode) {
+        if (toUnicode[originalCharCode] !== undefined) {
+          var unicode = toUnicode[fontCharCode];
+          // TODO: Try to map ligatures to the correct spot.
+          if (unicode.length === 1) {
+            fontCharCode = unicode.charCodeAt(0);
+          }
+        } else if (isCidFontType2) {
+          // For CIDFontType2, move characters not present in toUnicode
+          // to the private use area (fixes bug 1028735 and issue 4881).
+          fontCharCode = nextAvailableFontCharCode;
         }
       }
       // Try to move control characters, special characters and already mapped
@@ -2496,7 +2502,7 @@ var Font = (function FontClosure() {
       // font was symbolic and there is only an identity unicode map since the
       // characters probably aren't in the correct position (fixes an issue
       // with firefox and thuluthfont).
-      if ((fontCharCode in usedFontCharCodes ||
+      if ((usedFontCharCodes[fontCharCode] !== undefined ||
            fontCharCode <= 0x1f || // Control chars
            fontCharCode === 0x7F || // Control char
            fontCharCode === 0xAD || // Soft hyphen
@@ -2514,7 +2520,7 @@ var Font = (function FontClosure() {
             nextAvailableFontCharCode = fontCharCode + 1;
           }
 
-        } while (fontCharCode in usedFontCharCodes &&
+        } while (usedFontCharCodes[fontCharCode] !== undefined &&
                  nextAvailableFontCharCode <= PRIVATE_USE_OFFSET_END);
       }
 
@@ -3423,13 +3429,14 @@ var Font = (function FontClosure() {
               break;
             }
             var customNames = [];
+            var strBuf = [];
             while (font.pos < end) {
               var stringLength = font.getByte();
-              var string = '';
+              strBuf.length = stringLength;
               for (i = 0; i < stringLength; ++i) {
-                string += String.fromCharCode(font.getByte());
+                strBuf[i] = String.fromCharCode(font.getByte());
               }
-              customNames.push(string);
+              customNames.push(strBuf.join(''));
             }
             glyphNames = [];
             for (i = 0; i < numGlyphs; ++i) {
@@ -3888,8 +3895,9 @@ var Font = (function FontClosure() {
       }
 
       var charCodeToGlyphId = [], charCode;
-      if (properties.type == 'CIDFontType2') {
+      if (properties.type === 'CIDFontType2') {
         var cidToGidMap = properties.cidToGidMap || [];
+        var cidToGidMapLength = cidToGidMap.length;
         var cMap = properties.cMap.map;
         for (charCode in cMap) {
           charCode |= 0;
@@ -3897,9 +3905,9 @@ var Font = (function FontClosure() {
           assert(cid.length === 1, 'Max size of CID is 65,535');
           cid = cid.charCodeAt(0);
           var glyphId = -1;
-          if (cidToGidMap.length === 0) {
+          if (cidToGidMapLength === 0) {
             glyphId = charCode;
-          } else if (cid in cidToGidMap) {
+          } else if (cidToGidMap[cid] !== undefined) {
             glyphId = cidToGidMap[cid];
           }
           if (glyphId >= 0 && glyphId < numGlyphs) {
@@ -4102,18 +4110,28 @@ var Font = (function FontClosure() {
       this.toFontChar = newMapping.toFontChar;
       var numGlyphs = font.numGlyphs;
 
-      function getCharCode(charCodeToGlyphId, glyphId, addMap) {
+      function getCharCodes(charCodeToGlyphId, glyphId) {
+        var charCodes = null;
+        for (var charCode in charCodeToGlyphId) {
+          if (glyphId === charCodeToGlyphId[charCode]) {
+            if (!charCodes) {
+              charCodes = [];
+            }
+            charCodes.push(charCode | 0);
+          }
+        }
+        return charCodes;
+      }
+
+      function createCharCode(charCodeToGlyphId, glyphId) {
         for (var charCode in charCodeToGlyphId) {
           if (glyphId === charCodeToGlyphId[charCode]) {
             return charCode | 0;
           }
         }
-        if (addMap) {
-          newMapping.charCodeToGlyphId[newMapping.nextAvailableFontCharCode] =
-              glyphId;
-          return newMapping.nextAvailableFontCharCode++;
-        }
-        return null;
+        newMapping.charCodeToGlyphId[newMapping.nextAvailableFontCharCode] =
+            glyphId;
+        return newMapping.nextAvailableFontCharCode++;
       }
 
       var seacs = font.seacs;
@@ -4136,24 +4154,27 @@ var Font = (function FontClosure() {
             y: seac[0] * matrix[1] + seac[1] * matrix[3] + matrix[5]
           };
 
-          var charCode = getCharCode(mapping, glyphId);
-          if (charCode === null) {
+          var charCodes = getCharCodes(mapping, glyphId);
+          if (!charCodes) {
             // There's no point in mapping it if the char code was never mapped
             // to begin with.
             continue;
           }
-          // Find a fontCharCode that maps to the base and accent glyphs. If one
-          // doesn't exists, create it.
-          var charCodeToGlyphId = newMapping.charCodeToGlyphId;
-          var baseFontCharCode = getCharCode(charCodeToGlyphId, baseGlyphId,
-                                             true);
-          var accentFontCharCode = getCharCode(charCodeToGlyphId, accentGlyphId,
-                                               true);
-          seacMap[charCode] = {
-            baseFontCharCode: baseFontCharCode,
-            accentFontCharCode: accentFontCharCode,
-            accentOffset: accentOffset
-          };
+          for (var i = 0, ii = charCodes.length; i < ii; i++) {
+            var charCode = charCodes[i];
+            // Find a fontCharCode that maps to the base and accent glyphs.
+            // If one doesn't exists, create it.
+            var charCodeToGlyphId = newMapping.charCodeToGlyphId;
+            var baseFontCharCode = createCharCode(charCodeToGlyphId,
+                                                  baseGlyphId);
+            var accentFontCharCode = createCharCode(charCodeToGlyphId,
+                                                    accentGlyphId);
+            seacMap[charCode] = {
+              baseFontCharCode: baseFontCharCode,
+              accentFontCharCode: accentFontCharCode,
+              accentOffset: accentOffset
+            };
+          }
         }
         properties.seacMap = seacMap;
       }
