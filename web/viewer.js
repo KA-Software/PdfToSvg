@@ -256,6 +256,9 @@ var PDFView = {
       }),
       Preferences.get('useOnlyCssZoom').then(function resolved(value) {
         PDFJS.useOnlyCssZoom = value;
+      }),
+      Preferences.get('svgRendering').then(function resolved(value) {
+        PDFJS.svgRendering = value;
       })
       // TODO move more preferences and other async stuff here
     ]).catch(function (reason) { });
@@ -938,7 +941,9 @@ var PDFView = {
           isOnePageRenderedResolved = true;
           resolveOnePageRendered();
         }
-        thumbnailView.setImage(pageView.canvas);
+        if (!PDFJS.svgRendering) {
+          thumbnailView.setImage(pageView.canvas);
+        }
       };
     }
 
@@ -1782,6 +1787,9 @@ function webViewerInitialized() {
   if ('useOnlyCssZoom' in hashParams) {
     PDFJS.useOnlyCssZoom = (hashParams['useOnlyCssZoom'] === 'true');
   }
+  if ('svg' in hashParams) {
+    PDFJS.svgRendering = (hashParams['svg'] === 'true');
+  }
 
   if ('verbosity' in hashParams) {
     PDFJS.verbosity = hashParams['verbosity'] | 0;
@@ -1799,6 +1807,10 @@ function webViewerInitialized() {
   }
 //#endif
 
+  if (PDFJS.svgRendering) {
+    PDFJS.useOnlyCssZoom = true;
+    PDFJS.disableTextLayer = true;
+  }
 
 //#if !(FIREFOX || MOZCENTRAL)
   var locale = PDFJS.locale || navigator.language;
