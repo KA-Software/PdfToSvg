@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals PDFJS, PDFBug, FirefoxCom, Stats, Cache, PDFFindBar, CustomStyle,
-           PDFFindController, ProgressBar, TextLayerBuilder, DownloadManager,
-           getFileName, scrollIntoView, getPDFFileNameFromURL, PDFHistory,
-           Preferences, SidebarView, ViewHistory, PageView, ThumbnailView, URL,
-           noContextMenuHandler, SecondaryToolbar, PasswordPrompt,
-           PresentationMode, HandTool, Promise, DocumentProperties,
-           DocumentOutlineView, DocumentAttachmentsView, OverlayManager */
+/* globals PDFJS, PDFBug, FirefoxCom, Stats, Cache, ProgressBar,
+           DownloadManager, getFileName, scrollIntoView, getPDFFileNameFromURL,
+           PDFHistory, Preferences, SidebarView, ViewHistory, PageView,
+           ThumbnailView, URL, noContextMenuHandler, SecondaryToolbar,
+           PasswordPrompt, PresentationMode, HandTool, Promise,
+           DocumentProperties, DocumentOutlineView, DocumentAttachmentsView,
+           OverlayManager, PDFFindController, PDFFindBar */
 
 'use strict';
 
@@ -145,7 +145,12 @@ var PDFView = {
 
     Preferences.initialize();
 
-    PDFFindBar.initialize({
+    this.findController = new PDFFindController({
+      pdfPageSource: this,
+      integratedFind: this.supportsIntegratedFind
+    });
+
+    this.findBar = new PDFFindBar({
       bar: document.getElementById('findbar'),
       toggleButton: document.getElementById('viewFind'),
       findField: document.getElementById('findInput'),
@@ -154,13 +159,11 @@ var PDFView = {
       findMsg: document.getElementById('findMsg'),
       findStatusIcon: document.getElementById('findStatusIcon'),
       findPreviousButton: document.getElementById('findPrevious'),
-      findNextButton: document.getElementById('findNext')
+      findNextButton: document.getElementById('findNext'),
+      findController: this.findController
     });
 
-    PDFFindController.initialize({
-      pdfPageSource: this,
-      integratedFind: this.supportsIntegratedFind
-    });
+    this.findController.setFindBar(this.findBar);
 
     HandTool.initialize({
       container: container,
@@ -805,7 +808,7 @@ var PDFView = {
         var pdfOpenParams = PDFView.getAnchorUrl('#page=' + pageNumber);
         var destKind = dest[1];
         if (typeof destKind === 'object' && 'name' in destKind &&
-            destKind.name == 'XYZ') {
+            destKind.name === 'XYZ') {
           var scale = (dest[4] || this.currentScaleValue);
           var scaleNumber = parseFloat(scale);
           if (scaleNumber) {
@@ -939,7 +942,7 @@ var PDFView = {
       };
     }
 
-    PDFFindController.reset();
+    PDFView.findController.reset();
 
     this.pdfDocument = pdfDocument;
 
@@ -1028,7 +1031,7 @@ var PDFView = {
 
       PDFView.loadingBar.setWidth(container);
 
-      PDFFindController.resolveFirstPage();
+      PDFView.findController.resolveFirstPage();
 
       // Initialize the browsing history.
       PDFHistory.initialize(self.documentFingerprint);
@@ -1668,9 +1671,9 @@ var PDFView = {
 
       // In case we are already on the first or the last page there is no need
       // to do anything.
-      if ((currentPage == 1 && pageFlipDirection == PageFlipDirection.UP) ||
-          (currentPage == this.pages.length &&
-           pageFlipDirection == PageFlipDirection.DOWN)) {
+      if ((currentPage === 1 && pageFlipDirection === PageFlipDirection.UP) ||
+          (currentPage === this.pages.length &&
+           pageFlipDirection === PageFlipDirection.DOWN)) {
         return;
       }
 
@@ -1862,7 +1865,7 @@ function webViewerInitialized() {
   var mainContainer = document.getElementById('mainContainer');
   var outerContainer = document.getElementById('outerContainer');
   mainContainer.addEventListener('transitionend', function(e) {
-    if (e.target == mainContainer) {
+    if (e.target === mainContainer) {
       var event = document.createEvent('UIEvents');
       event.initUIEvent('resize', false, false, window, 0);
       window.dispatchEvent(event);
@@ -1950,6 +1953,28 @@ function webViewerInitialized() {
 //PDFView.setTitleUsingUrl(file);
 //PDFView.initPassiveLoading();
 //return;
+//#endif
+
+//#if GENERIC
+  if (file && file.lastIndexOf('file:', 0) === 0) {
+    // file:-scheme. Load the contents in the main thread because QtWebKit
+    // cannot load file:-URLs in a Web Worker. file:-URLs are usually loaded
+    // very quickly, so there is no need to set up progress event listeners.
+    PDFView.setTitleUsingUrl(file);
+    var xhr = new XMLHttpRequest();
+    xhr.onload = function() {
+      PDFView.open(new Uint8Array(xhr.response), 0);
+    };
+    try {
+      xhr.open('GET', file);
+      xhr.responseType = 'arraybuffer';
+      xhr.send();
+    } catch (e) {
+      PDFView.error(mozL10n.get('loading_error', null,
+            'An error occurred while loading the PDF.'), e);
+    }
+    return;
+  }
 //#endif
 
 //#if !B2G && !CHROME
@@ -2107,7 +2132,7 @@ function selectScaleOption(value) {
   var predefinedValueFound = false;
   for (var i = 0; i < options.length; i++) {
     var option = options[i];
-    if (option.value != value) {
+    if (option.value !== value) {
       option.selected = false;
       continue;
     }
@@ -2237,13 +2262,13 @@ window.addEventListener('keydown', function keydown(evt) {
     switch (evt.keyCode) {
       case 70: // f
         if (!PDFView.supportsIntegratedFind) {
-          PDFFindBar.open();
+          PDFView.findBar.open();
           handled = true;
         }
         break;
       case 71: // g
         if (!PDFView.supportsIntegratedFind) {
-          PDFFindBar.dispatchEvent('again', cmd === 5 || cmd === 12);
+          PDFView.findBar.dispatchEvent('again', cmd === 5 || cmd === 12);
           handled = true;
         }
         break;
@@ -2344,8 +2369,8 @@ window.addEventListener('keydown', function keydown(evt) {
           SecondaryToolbar.close();
           handled = true;
         }
-        if (!PDFView.supportsIntegratedFind && PDFFindBar.opened) {
-          PDFFindBar.close();
+        if (!PDFView.supportsIntegratedFind && PDFView.findBar.opened) {
+          PDFView.findBar.close();
           handled = true;
         }
         break;
@@ -2376,8 +2401,8 @@ window.addEventListener('keydown', function keydown(evt) {
         }
         break;
       case 35: // end
-        if (PresentationMode.active ||
-            PDFView.page < PDFView.pdfDocument.numPages) {
+        if (PresentationMode.active || (PDFView.pdfDocument &&
+            PDFView.page < PDFView.pdfDocument.numPages)) {
           PDFView.page = PDFView.pdfDocument.numPages;
           handled = true;
         }

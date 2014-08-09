@@ -98,12 +98,12 @@ var Dict = (function DictClosure() {
     get: function Dict_get(key1, key2, key3) {
       var value;
       var xref = this.xref;
-      if (typeof (value = this.map[key1]) != 'undefined' || key1 in this.map ||
-          typeof key2 == 'undefined') {
+      if (typeof (value = this.map[key1]) !== 'undefined' || key1 in this.map ||
+          typeof key2 === 'undefined') {
         return xref ? xref.fetchIfRef(value) : value;
       }
-      if (typeof (value = this.map[key2]) != 'undefined' || key2 in this.map ||
-          typeof key3 == 'undefined') {
+      if (typeof (value = this.map[key2]) !== 'undefined' || key2 in this.map ||
+          typeof key3 === 'undefined') {
         return xref ? xref.fetchIfRef(value) : value;
       }
       value = this.map[key3] || null;
@@ -583,7 +583,7 @@ var Catalog = (function CatalogClosure() {
               }
               nodesToVisit.push(obj);
               next();
-            }.bind(this), capability.reject.bind(capability));
+            }, capability.reject);
             return;
           }
 
@@ -652,7 +652,7 @@ var Catalog = (function CatalogClosure() {
           for (var i = 0; i < kids.length; i++) {
             var kid = kids[i];
             assert(isRef(kid), 'kids must be a ref');
-            if (kid.num == kidRef.num) {
+            if (kid.num === kidRef.num) {
               found = true;
               break;
             }
@@ -976,7 +976,7 @@ var XRef = (function XRefClosure() {
         // finding byte sequence
         while (offset < dataLength) {
           var i = 0;
-          while (i < length && data[offset + i] == what[i]) {
+          while (i < length && data[offset + i] === what[i]) {
             ++i;
           }
           if (i >= length) {
@@ -1287,21 +1287,22 @@ var XRef = (function XRefClosure() {
     },
 
     fetchAsync: function XRef_fetchAsync(ref, suppressEncryption) {
-      return new Promise(function (resolve, reject) {
-          var tryFetch = function () {
-            try {
-              resolve(this.fetch(ref, suppressEncryption));
-            } catch (e) {
-              if (e instanceof MissingDataException) {
-                this.stream.manager.requestRange(e.begin, e.end, tryFetch);
-                return;
-              }
-              reject(e);
-            }
-          }.bind(this);
-          tryFetch();
-        }.bind(this));
-      },
+      var streamManager = this.stream.manager;
+      var xref = this;
+      return new Promise(function tryFetch(resolve, reject) {
+        try {
+          resolve(xref.fetch(ref, suppressEncryption));
+        } catch (e) {
+          if (e instanceof MissingDataException) {
+            streamManager.requestRange(e.begin, e.end, function () {
+              tryFetch(resolve, reject);
+            });
+            return;
+          }
+          reject(e);
+        }
+      });
+    },
 
     getCatalogObj: function XRef_getCatalogObj() {
       return this.root;
