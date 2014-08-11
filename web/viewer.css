@@ -1265,7 +1265,7 @@ html[dir='rtl'] .attachmentsItem > button {
   overflow: hidden;
 }
 
-canvas {
+canvas, svg {
   margin: 0;
   display: block;
 }
@@ -1339,6 +1339,10 @@ canvas {
 
 .textLayer .highlight.selected {
   background-color: rgba(0, 100, 0, 0.2);
+}
+
+svg text {
+  cursor: text;
 }
 
 /* TODO: file FF bug to support ::-moz-selection:window-inactive
@@ -1806,7 +1810,7 @@ html[dir='rtl'] #documentPropertiesOverlay .row > * {
     overflow: visible;
   }
 
-  #mainContainer, #viewerContainer, .page, .page canvas {
+  #mainContainer, #viewerContainer, .page, .page canvas, .page svg {
     position: static;
     padding: 0;
     margin: 0;

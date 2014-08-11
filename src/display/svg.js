@@ -1136,3 +1136,4 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
   };
   return SVGGraphics;
 })();
+PDFJS.SVGGraphics = SVGGraphics;
