@@ -381,6 +381,7 @@ target.bundle = function(args) {
     'display/font_loader.js',
     'display/annotation_helper.js',
     'display/svg.js',
+    '../examples/node/pdf2svg.js',
   ]);
 
   var srcFiles = builder.getWorkerSrcFiles('src/worker_loader.js');

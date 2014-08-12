@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 /* globals PDFJS, FONT_IDENTITY_MATRIX, IDENTITY_MATRIX,
-           isNum, OPS, Promise, Util, warn, ImageKind, PDFJS */
+           isNum, OPS, Promise, Util, warn, ImageKind, TextRenderingMode */
 
 'use strict';
 
@@ -439,6 +439,12 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.tgrp.setAttributeNS(null, 'transform', pm(this.transformMatrix));
     },
 
+    dumpSVG: function SVGGraphics_dumpSVG(viewport, pageNum, container,
+                                          operatorList) {
+      this.beginDrawing(viewport, pageNum, container, operatorList);
+      return this.svg;
+    },
+
     beginDrawing: function SVGGraphics_beginDrawing(viewport, pageNum,
                                                container, operatorList) {
       this.svg = createScratchSVG(viewport.width, viewport.height);
@@ -453,7 +459,9 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.pgrp.appendChild(this.defs);
       this.pgrp.appendChild(this.tgrp);
       this.svg.appendChild(this.pgrp);
-      this.container.appendChild(this.svg);
+      if (container) {
+        this.container.appendChild(this.svg);
+      }
       var opTree = this.convertOpList(operatorList);
       this.executeOpTree(opTree);
     },
@@ -1044,7 +1052,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       var current = this.current;
       var imgObj = this.objs.get(objId);
       var imgEl = document.createElementNS(NS, 'svg:image');
-      imgEl.setAttributeNS(XLINK_NS, 'href', imgObj.src);
+      imgEl.setAttributeNS(XLINK_NS, 'xlink:href', imgObj.src);
       imgEl.setAttributeNS(null, 'width', imgObj.width + 'px');
       imgEl.setAttributeNS(null, 'height', imgObj.height + 'px');
       imgEl.setAttributeNS(null, 'x', '0');
@@ -1086,7 +1094,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.element = cliprect;
       this.clip('nonzero');
       var imgEl = document.createElementNS(NS, 'svg:image');
-      imgEl.setAttributeNS(XLINK_NS, 'href', imgSrc);
+      imgEl.setAttributeNS(XLINK_NS, 'xlink:href', imgSrc);
       imgEl.setAttributeNS(null, 'x', '0');
       imgEl.setAttributeNS(null, 'y', pf(-height));
       imgEl.setAttributeNS(null, 'width', pf(width) + 'px');
@@ -1137,3 +1145,4 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
   return SVGGraphics;
 })();
 PDFJS.SVGGraphics = SVGGraphics;
+

@@ -79,6 +79,10 @@ var FontLoader = {
   },
 
   isSyncFontLoadingSupported: (function detectSyncFontLoadingSupport() {
+    if (navigator.userAgent == 'node') {
+      return true;
+    }
+    
     if (isWorker) {
       return false;
     }
