@@ -90,7 +90,11 @@ var FontLoader = {
     if (m && m[1] >= 14) {
       return true;
     }
+
     // TODO other browsers
+    if (userAgent === 'node') {
+      return true;
+    }
     return false;
   })(),
 
