@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals RenderingStates, PDFView, PDFHistory, PDFFindBar, PDFJS, mozL10n,
-           CustomStyle, PresentationMode, scrollIntoView, SCROLLBAR_PADDING,
-           CSS_UNITS, UNKNOWN_SCALE, DEFAULT_SCALE, getOutputScale,
-           TextLayerBuilder, cache, Stats */
+/* globals RenderingStates, PDFView, PDFHistory, PDFJS, mozL10n, CustomStyle,
+           PresentationMode, scrollIntoView, SCROLLBAR_PADDING, CSS_UNITS,
+           UNKNOWN_SCALE, DEFAULT_SCALE, getOutputScale, TextLayerBuilder,
+           cache, Stats */
 
 'use strict';
 
@@ -103,8 +103,10 @@ var PageView = function pageView(container, id, scale,
     if (this.canvas) {
       // Zeroing the width and height causes Firefox to release graphics
       // resources immediately, which can greatly reduce memory consumption.
-      this.canvas.width = 0;
-      this.canvas.height = 0;
+      if (this.canvas.tagName === 'CANVAS') {
+        this.canvas.width = 0;
+        this.canvas.height = 0;
+      }
       delete this.canvas;
     }
 
@@ -127,7 +129,7 @@ var PageView = function pageView(container, id, scale,
     });
 
     var isScalingRestricted = false;
-    if (this.canvas && PDFJS.maxCanvasPixels > 0) {
+    if (this.canvas && PDFJS.maxCanvasPixels > 0 && !PDFJS.svgRendering) {
       var ctx = this.canvas.getContext('2d');
       var outputScale = getOutputScale(ctx);
       var pixelsInViewport = this.viewport.width * this.viewport.height;
@@ -272,7 +274,7 @@ var PageView = function pageView(container, id, scale,
 
           case 'Find':
             if (!PDFView.supportsIntegratedFind) {
-              PDFFindBar.toggle();
+              PDFView.findBar.toggle();
             }
             break;
 
@@ -499,55 +501,66 @@ var PageView = function pageView(container, id, scale,
     canvasWrapper.style.height = div.style.height;
     canvasWrapper.classList.add('canvasWrapper');
 
-    var canvas = document.createElement('canvas');
-    canvas.id = 'page' + this.id;
-    canvasWrapper.appendChild(canvas);
     if (this.annotationLayer) {
       // annotationLayer needs to stay on top
       div.insertBefore(canvasWrapper, this.annotationLayer);
     } else {
       div.appendChild(canvasWrapper);
     }
-    this.canvas = canvas;
 
-    var ctx = canvas.getContext('2d');
-    var outputScale = getOutputScale(ctx);
+    var canvas;
+    if (!PDFJS.svgRendering) {
+      canvas = document.createElement('canvas');
+      canvas.id = 'page' + this.id;
+      canvasWrapper.appendChild(canvas);
+      this.canvas = canvas;
 
-    if (PDFJS.useOnlyCssZoom) {
-      var actualSizeViewport = viewport.clone({ scale: CSS_UNITS });
-      // Use a scale that will make the canvas be the original intended size
-      // of the page.
-      outputScale.sx *= actualSizeViewport.width / viewport.width;
-      outputScale.sy *= actualSizeViewport.height / viewport.height;
-      outputScale.scaled = true;
-    }
+      var ctx = canvas.getContext('2d');
+      var outputScale = getOutputScale(ctx);
 
-    if (PDFJS.maxCanvasPixels > 0) {
-      var pixelsInViewport = viewport.width * viewport.height;
-      var maxScale = Math.sqrt(PDFJS.maxCanvasPixels / pixelsInViewport);
-      if (outputScale.sx > maxScale || outputScale.sy > maxScale) {
-        outputScale.sx = maxScale;
-        outputScale.sy = maxScale;
+      if (PDFJS.useOnlyCssZoom) {
+        var actualSizeViewport = viewport.clone({ scale: CSS_UNITS });
+        // Use a scale that will make the canvas be the original intended size
+        // of the page.
+        outputScale.sx *= actualSizeViewport.width / viewport.width;
+        outputScale.sy *= actualSizeViewport.height / viewport.height;
         outputScale.scaled = true;
-        this.hasRestrictedScaling = true;
-      } else {
-        this.hasRestrictedScaling = false;
+      }
+
+      if (PDFJS.maxCanvasPixels > 0) {
+        var pixelsInViewport = viewport.width * viewport.height;
+        var maxScale = Math.sqrt(PDFJS.maxCanvasPixels / pixelsInViewport);
+        if (outputScale.sx > maxScale || outputScale.sy > maxScale) {
+          outputScale.sx = maxScale;
+          outputScale.sy = maxScale;
+          outputScale.scaled = true;
+          this.hasRestrictedScaling = true;
+        } else {
+          this.hasRestrictedScaling = false;
+        }
+      }
+
+      canvas.width = (Math.floor(viewport.width) * outputScale.sx) | 0;
+      canvas.height = (Math.floor(viewport.height) * outputScale.sy) | 0;
+      canvas.style.width = Math.floor(viewport.width) + 'px';
+      canvas.style.height = Math.floor(viewport.height) + 'px';
+      // Add the viewport so it's known what it was originally drawn with.
+      canvas._viewport = viewport;
+
+      // TODO(mack): use data attributes to store these
+      ctx._scaleX = outputScale.sx;
+      ctx._scaleY = outputScale.sy;
+      if (outputScale.scaled) {
+        ctx.scale(outputScale.sx, outputScale.sy);
       }
     }
-
-    canvas.width = (Math.floor(viewport.width) * outputScale.sx) | 0;
-    canvas.height = (Math.floor(viewport.height) * outputScale.sy) | 0;
-    canvas.style.width = Math.floor(viewport.width) + 'px';
-    canvas.style.height = Math.floor(viewport.height) + 'px';
-    // Add the viewport so it's known what it was originally drawn with.
-    canvas._viewport = viewport;
 
     var textLayerDiv = null;
     if (!PDFJS.disableTextLayer) {
       textLayerDiv = document.createElement('div');
       textLayerDiv.className = 'textLayer';
-      textLayerDiv.style.width = canvas.style.width;
-      textLayerDiv.style.height = canvas.style.height;
+      textLayerDiv.style.width =  Math.floor(viewport.width) + 'px';
+      textLayerDiv.style.height = Math.floor(viewport.height) + 'px';
       if (this.annotationLayer) {
         // annotationLayer needs to stay on top
         div.insertBefore(textLayerDiv, this.annotationLayer);
@@ -555,20 +568,16 @@ var PageView = function pageView(container, id, scale,
         div.appendChild(textLayerDiv);
       }
     }
+
     var textLayer = this.textLayer =
       textLayerDiv ? new TextLayerBuilder({
         textLayerDiv: textLayerDiv,
         pageIndex: this.id - 1,
         lastScrollSource: PDFView,
         viewport: this.viewport,
-        isViewerInPresentationMode: PresentationMode.active
+        isViewerInPresentationMode: PresentationMode.active,
+        findController: PDFView.findController
       }) : null;
-    // TODO(mack): use data attributes to store these
-    ctx._scaleX = outputScale.sx;
-    ctx._scaleY = outputScale.sy;
-    if (outputScale.scaled) {
-      ctx.scale(outputScale.sx, outputScale.sy);
-    }
 
     // Rendering area
 
@@ -638,6 +647,32 @@ var PageView = function pageView(container, id, scale,
 //    });
 //#endif
       callback();
+    }
+
+    if (PDFJS.svgRendering) {
+      // the next page fetch will start only after this page rendering is done
+      this.pdfPage.getOperatorList().then(function (opList) {
+        var page = self.pdfPage;
+        var pageNum = self.id;
+        var svgGfx = new PDFJS.SVGGraphics(page.commonObjs, page.objs);
+        return svgGfx.loadDependencies(opList).then(function (values) {
+          svgGfx.beginDrawing(viewport, pageNum, canvasWrapper, opList);
+          self.canvas = canvas = svgGfx.svg;
+          canvas._viewport = viewport;
+          pageViewDrawCallback(null);
+        }, function (reason) {
+          pageViewDrawCallback(reason);
+        });
+      });
+
+      setupAnnotations(div, pdfPage, this.viewport);
+      div.setAttribute('data-loaded', true);
+
+      // Add the page to the cache at the start of drawing. That way it can be
+      // evicted from the cache and destroyed even if we pause its rendering.
+      cache.push(this);
+
+      return;
     }
 
     var renderContext = {

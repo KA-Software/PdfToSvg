@@ -1,6 +1,6 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
-/* globals expect, it, describe, StringStream, Lexer, CMapFactory, Name */
+/* globals expect, it, describe, StringStream, CMapFactory, Name */
 
 'use strict';
 
@@ -44,7 +44,7 @@ describe('cmap', function() {
               'endcidchar\n';
     var stream = new StringStream(str);
     var cmap = CMapFactory.create(stream);
-    expect(cmap.lookup(0x14)).toEqual(String.fromCharCode(0x00));
+    expect(cmap.lookup(0x14)).toEqual(0x00);
     expect(cmap.lookup(0x15)).toBeUndefined();
   });
   it('parses begincidrange', function() {
@@ -54,8 +54,8 @@ describe('cmap', function() {
     var stream = new StringStream(str);
     var cmap = CMapFactory.create(stream);
     expect(cmap.lookup(0x15)).toBeUndefined();
-    expect(cmap.lookup(0x16)).toEqual(String.fromCharCode(0x00));
-    expect(cmap.lookup(0x1B)).toEqual(String.fromCharCode(0x05));
+    expect(cmap.lookup(0x16)).toEqual(0x00);
+    expect(cmap.lookup(0x1B)).toEqual(0x05);
     expect(cmap.lookup(0x1C)).toBeUndefined();
   });
   it('decodes codespace ranges', function() {
@@ -95,9 +95,8 @@ describe('cmap', function() {
     expect(cmap.vertical).toEqual(true);
   });
   it('loads built in cmap', function() {
-    var cmap = CMapFactory.create(new Name('Adobe-Japan1-1'),
-                                  '../../external/cmaps/',
-                                  null);
+    CMapFactory.create(new Name('Adobe-Japan1-1'), '../../external/cmaps/',
+                       null);
   });
 });
 

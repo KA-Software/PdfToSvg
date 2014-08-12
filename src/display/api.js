@@ -130,6 +130,13 @@ PDFJS.useOnlyCssZoom = (PDFJS.useOnlyCssZoom === undefined ?
                         false : PDFJS.useOnlyCssZoom);
 
 /**
+ * Enables SVG rendering.
+ * @var {boolean}
+ */
+PDFJS.svgRendering = (PDFJS.svgRendering === undefined ?
+                      false : PDFJS.svgRendering);
+
+/**
  * Controls the logging level.
  * The constants from PDFJS.VERBOSITY_LEVELS should be used:
  * - errors
@@ -503,8 +510,7 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
       // this call to render.
       this.pendingDestroy = false;
 
-      var renderingIntent = ('intent' in params ?
-        (params.intent == 'print' ? 'print' : 'display') : 'display');
+      var renderingIntent = (params.intent === 'print' ? 'print' : 'display');
 
       if (!this.intentStates[renderingIntent]) {
         this.intentStates[renderingIntent] = {};
@@ -1003,7 +1009,7 @@ var WorkerTransport = (function WorkerTransportClosure() {
       messageHandler.on('JpegDecode', function(data) {
         var imageUrl = data[0];
         var components = data[1];
-        if (components != 3 && components != 1) {
+        if (components !== 3 && components !== 1) {
           return Promise.reject(
             new Error('Only 3 components or 1 component can be returned'));
         }
@@ -1022,13 +1028,13 @@ var WorkerTransport = (function WorkerTransportClosure() {
             var data = tmpCtx.getImageData(0, 0, width, height).data;
             var i, j;
 
-            if (components == 3) {
+            if (components === 3) {
               for (i = 0, j = 0; i < rgbaLength; i += 4, j += 3) {
                 buf[j] = data[i];
                 buf[j + 1] = data[i + 1];
                 buf[j + 2] = data[i + 2];
               }
-            } else if (components == 1) {
+            } else if (components === 1) {
               for (i = 0, j = 0; i < rgbaLength; i += 4, j++) {
                 buf[j] = data[i];
               }
@@ -1132,7 +1138,9 @@ var WorkerTransport = (function WorkerTransportClosure() {
           }
         }
         this.commonObjs.clear();
-        FontLoader.clear();
+        if (!PDFJS.svgRendering) { // HACK we might have SVGs using fonts
+          FontLoader.clear();
+        }
       }.bind(this));
     }
   };
