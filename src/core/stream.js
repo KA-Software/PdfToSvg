@@ -116,11 +116,17 @@ var StringStream = (function StringStreamClosure() {
 
 // super class for the decoding streams
 var DecodeStream = (function DecodeStreamClosure() {
+  // Lots of DecodeStreams are created whose buffers are never used.  For these
+  // we share a single empty buffer. This is (a) space-efficient and (b) avoids
+  // having special cases that would be required if we used |null| for an empty
+  // buffer.
+  var emptyBuffer = new Uint8Array(0);
+
   function DecodeStream(maybeMinBufferLength) {
     this.pos = 0;
     this.bufferLength = 0;
     this.eof = false;
-    this.buffer = null;
+    this.buffer = emptyBuffer;
     this.minBufferLength = 512;
     if (maybeMinBufferLength) {
       // Compute the first power of two that is as big as maybeMinBufferLength.
@@ -139,23 +145,15 @@ var DecodeStream = (function DecodeStreamClosure() {
     },
     ensureBuffer: function DecodeStream_ensureBuffer(requested) {
       var buffer = this.buffer;
-      var current;
-      if (buffer) {
-        current = buffer.byteLength;
-        if (requested <= current) {
-          return buffer;
-        }
-      } else {
-        current = 0;
+      if (requested <= buffer.byteLength) {
+        return buffer;
       }
       var size = this.minBufferLength;
       while (size < requested) {
         size *= 2;
       }
       var buffer2 = new Uint8Array(size);
-      if (buffer) {
-        buffer2.set(buffer);
-      }
+      buffer2.set(buffer);
       return (this.buffer = buffer2);
     },
     getByte: function DecodeStream_getByte() {
@@ -199,12 +197,6 @@ var DecodeStream = (function DecodeStreamClosure() {
           this.readBlock();
         }
         end = this.bufferLength;
-
-        // checking if bufferLength is still 0 then
-        // the buffer has to be initialized
-        if (!end) {
-          this.buffer = new Uint8Array(0);
-        }
       }
 
       this.pos = end;
@@ -382,10 +374,10 @@ var FlateStream = (function FlateStreamClosure() {
 
     var cmf = str.getByte();
     var flg = str.getByte();
-    if (cmf == -1 || flg == -1) {
+    if (cmf === -1 || flg === -1) {
       error('Invalid header in flate stream: ' + cmf + ', ' + flg);
     }
-    if ((cmf & 0x0f) != 0x08) {
+    if ((cmf & 0x0f) !== 0x08) {
       error('Unknown compression method in flate stream: ' + cmf + ', ' + flg);
     }
     if ((((cmf << 8) + flg) % 31) !== 0) {
@@ -452,7 +444,7 @@ var FlateStream = (function FlateStreamClosure() {
   };
 
   FlateStream.prototype.generateHuffmanTable =
-    function flateStreamGenerateHuffmanTable(lengths) {
+      function flateStreamGenerateHuffmanTable(lengths) {
     var n = lengths.length;
 
     // find max code length
@@ -471,7 +463,7 @@ var FlateStream = (function FlateStreamClosure() {
          len <= maxLen;
          ++len, code <<= 1, skip <<= 1) {
       for (var val = 0; val < n; ++val) {
-        if (lengths[val] == len) {
+        if (lengths[val] === len) {
           // bit-reverse the code
           var code2 = 0;
           var t = code;
@@ -521,7 +513,7 @@ var FlateStream = (function FlateStreamClosure() {
         error('Bad block header in flate stream');
       }
       check |= (b << 8);
-      if (check != (~blockLen & 0xffff) &&
+      if (check !== (~blockLen & 0xffff) &&
           (blockLen !== 0 || check !== 0)) {
         // Ignoring error for bad "empty" block (see issue 1277)
         error('Bad uncompressed block length in flate stream');
@@ -552,10 +544,10 @@ var FlateStream = (function FlateStreamClosure() {
 
     var litCodeTable;
     var distCodeTable;
-    if (hdr == 1) { // compressed block, fixed codes
+    if (hdr === 1) { // compressed block, fixed codes
       litCodeTable = fixedLitCodeTab;
       distCodeTable = fixedDistCodeTab;
-    } else if (hdr == 2) { // compressed block, dynamic codes
+    } else if (hdr === 2) { // compressed block, dynamic codes
       var numLitCodes = this.getBits(5) + 257;
       var numDistCodes = this.getBits(5) + 1;
       var numCodeLenCodes = this.getBits(4) + 4;
@@ -577,11 +569,11 @@ var FlateStream = (function FlateStreamClosure() {
       var bitsLength, bitsOffset, what;
       while (i < codes) {
         var code = this.getCode(codeLenCodeTab);
-        if (code == 16) {
+        if (code === 16) {
           bitsLength = 2; bitsOffset = 3; what = len;
-        } else if (code == 17) {
+        } else if (code === 17) {
           bitsLength = 3; bitsOffset = 3; what = (len = 0);
-        } else if (code == 18) {
+        } else if (code === 18) {
           bitsLength = 7; bitsOffset = 11; what = (len = 0);
         } else {
           codeLengths[i++] = len = code;
@@ -615,7 +607,7 @@ var FlateStream = (function FlateStreamClosure() {
         buffer[pos++] = code1;
         continue;
       }
-      if (code1 == 256) {
+      if (code1 === 256) {
         this.bufferLength = pos;
         return;
       }
@@ -936,7 +928,7 @@ var JpegStream = (function JpegStreamClosure() {
       function JpegStream_isNativelyDecodable(xref, res) {
     var cs = ColorSpace.parse(this.dict.get('ColorSpace', 'CS'), xref, res);
     var numComps = cs.numComps;
-    return numComps == 1 || numComps == 3;
+    return numComps === 1 || numComps === 3;
   };
 
   return JpegStream;
@@ -1156,7 +1148,7 @@ var Ascii85Stream = (function Ascii85StreamClosure() {
     var i;
 
     // special code for z
-    if (c == Z_LOWER_CHAR) {
+    if (c === Z_LOWER_CHAR) {
       buffer = this.ensureBuffer(bufferLength + 4);
       for (i = 0; i < 4; ++i) {
         buffer[bufferLength + i] = 0;
@@ -1173,7 +1165,7 @@ var Ascii85Stream = (function Ascii85StreamClosure() {
 
         input[i] = c;
 
-        if (c === EOF || c == TILDA_CHAR) {
+        if (c === EOF || c === TILDA_CHAR) {
           break;
         }
       }
@@ -1280,7 +1272,7 @@ var RunLengthStream = (function RunLengthStreamClosure() {
     // (in addition to the second byte from the header), n = 129 through 255 -
     // duplicate the second byte from the header (257 - n) times, n = 128 - end.
     var repeatHeader = this.str.getBytes(2);
-    if (!repeatHeader || repeatHeader.length < 2 || repeatHeader[0] == 128) {
+    if (!repeatHeader || repeatHeader.length < 2 || repeatHeader[0] === 128) {
       this.eof = true;
       return;
     }
@@ -1773,7 +1765,7 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
     while ((code1 = this.lookBits(12)) === 0) {
       this.eatBits(1);
     }
-    if (code1 == 1) {
+    if (code1 === 1) {
       this.eatBits(12);
     }
     if (this.encoding > 0) {
@@ -2026,26 +2018,33 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
         }
       }
 
-      if (this.byteAlign) {
-        this.inputBits &= ~7;
-      }
-
       var gotEOL = false;
 
-      if (!this.eoblock && this.row == this.rows - 1) {
+      if (!this.eoblock && this.row === this.rows - 1) {
         this.eof = true;
-      } else {
+      } else if (this.eoline || !this.byteAlign) {
         code1 = this.lookBits(12);
-        while (code1 === 0) {
-          this.eatBits(1);
-          code1 = this.lookBits(12);
+        if (this.eoline) {
+          while (code1 !== EOF && code1 !== 1) {
+            this.eatBits(1);
+            code1 = this.lookBits(12);
+          }
+        } else {
+          while (code1 === 0) {
+            this.eatBits(1);
+            code1 = this.lookBits(12);
+          }
         }
-        if (code1 == 1) {
+        if (code1 === 1) {
           this.eatBits(12);
           gotEOL = true;
-        } else if (code1 == EOF) {
+        } else if (code1 === EOF) {
           this.eof = true;
         }
+      }
+
+      if (this.byteAlign && !gotEOL) {
+        this.inputBits &= ~7;
       }
 
       if (!this.eof && this.encoding > 0) {
@@ -2053,9 +2052,9 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
         this.eatBits(1);
       }
 
-      if (this.eoblock && gotEOL) {
+      if (this.eoblock && gotEOL && this.byteAlign) {
         code1 = this.lookBits(12);
-        if (code1 == 1) {
+        if (code1 === 1) {
           this.eatBits(12);
           if (this.encoding > 0) {
             this.lookBits(1);
@@ -2064,7 +2063,7 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
           if (this.encoding >= 0) {
             for (i = 0; i < 4; ++i) {
               code1 = this.lookBits(12);
-              if (code1 != 1) {
+              if (code1 !== 1) {
                 info('bad rtc code: ' + code1);
               }
               this.eatBits(12);
@@ -2079,11 +2078,11 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
       } else if (this.err && this.eoline) {
         while (true) {
           code1 = this.lookBits(13);
-          if (code1 == EOF) {
+          if (code1 === EOF) {
             this.eof = true;
             return null;
           }
-          if ((code1 >> 1) == 1) {
+          if ((code1 >> 1) === 1) {
             break;
           }
           this.eatBits(1);
@@ -2159,7 +2158,7 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
     var limitValue = limit || 0;
     for (var i = start; i <= end; ++i) {
       var code = this.lookBits(i);
-      if (code == EOF) {
+      if (code === EOF) {
         return [true, 1, false];
       }
       if (i < end) {
@@ -2167,7 +2166,7 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
       }
       if (!limitValue || code >= limitValue) {
         var p = table[code - limitValue];
-        if (p[0] == i) {
+        if (p[0] === i) {
           this.eatBits(i);
           return [true, p[1], true];
         }
@@ -2205,7 +2204,7 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
     var p;
     if (this.eoblock) {
       code = this.lookBits(12);
-      if (code == EOF) {
+      if (code === EOF) {
         return 1;
       }
 
@@ -2241,7 +2240,7 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
     var code, p;
     if (this.eoblock) {
       code = this.lookBits(13);
-      if (code == EOF) {
+      if (code === EOF) {
         return 1;
       }
       if ((code >> 7) === 0) {
@@ -2389,7 +2388,7 @@ var LZWStream = (function LZWStreamClosure() {
         } else {
           currentSequence[currentSequenceLength++] = currentSequence[0];
         }
-      } else if (code == 256) {
+      } else if (code === 256) {
         codeLength = 9;
         nextCode = 258;
         currentSequenceLength = 0;
