@@ -19,15 +19,12 @@
 
 'use strict';
 
-function createScratchSVG(width, height) {
-  var NS = 'http://www.w3.org/2000/svg';
-  var svg = document.createElementNS(NS, 'svg:svg');
-  svg.setAttributeNS(null, 'version', '1.1');
-  svg.setAttributeNS(null, 'width', width + 'px');
-  svg.setAttributeNS(null, 'height', height + 'px');
-  svg.setAttributeNS(null, 'viewBox', '0 0 ' + width + ' ' + height);
-  return svg;
-}
+//#if (GENERIC || SINGLE_FILE)
+var SVG_DEFAULTS = {
+  fontStyle: 'normal',
+  fontWeight: 'normal',
+  fillColor: '#000000'
+};
 
 var convertImgDataToPng = (function convertImgDataToPngClosure() {
   var PNG_HEADER =
@@ -60,7 +57,6 @@ var convertImgDataToPng = (function convertImgDataToPngClosure() {
 
   function writePngChunk(type, body, data, offset) {
     var p = offset;
-
     var len = body.length;
 
     data[p] = len >> 24 & 0xff;
@@ -99,11 +95,9 @@ var convertImgDataToPng = (function convertImgDataToPngClosure() {
   function encode(imgData, kind) {
     var width = imgData.width;
     var height = imgData.height;
-    var bitDepth;
-    var colorType;
-
+    var bitDepth, colorType, lineSize;
     var bytes = imgData.data;
-    var lineSize;
+
     switch (kind) {
       case ImageKind.GRAYSCALE_1BPP:
         colorType = 0;
@@ -202,8 +196,8 @@ var convertImgDataToPng = (function convertImgDataToPngClosure() {
     idat[pi++] = adler & 0xff;
 
     // PNG will consists: header, IHDR+data, IDAT+data, and IEND.
-    var pngLength = PNG_HEADER.length + CHUNK_WRAPPER_SIZE * 3 +
-      ihdr.length + idat.length;
+    var pngLength = PNG_HEADER.length + (CHUNK_WRAPPER_SIZE * 3) +
+                    ihdr.length + idat.length;
     var data = new Uint8Array(pngLength);
     var offset = 0;
     data.set(PNG_HEADER, offset);
@@ -219,35 +213,38 @@ var convertImgDataToPng = (function convertImgDataToPngClosure() {
 
   return function convertImgDataToPng(imgData) {
     var kind = (imgData.kind === undefined ?
-      ImageKind.GRAYSCALE_1BPP : imgData.kind);
+                ImageKind.GRAYSCALE_1BPP : imgData.kind);
     return encode(imgData, kind);
   };
 })();
 
 var SVGExtraState = (function SVGExtraStateClosure() {
-  function SVGExtraState(old) {
-    // Are soft masks and alpha values shapes or opacities?
+  function SVGExtraState() {
     this.fontSizeScale = 1;
-    this.fontWeight = 'normal';
+    this.fontWeight = SVG_DEFAULTS.fontWeight;
     this.fontSize = 0;
 
     this.textMatrix = IDENTITY_MATRIX;
     this.fontMatrix = FONT_IDENTITY_MATRIX;
     this.leading = 0;
+
     // Current point (in user coordinates)
     this.x = 0;
     this.y = 0;
+
     // Start of text line (in text coordinates)
     this.lineX = 0;
     this.lineY = 0;
+
     // Character and word spacing
     this.charSpacing = 0;
     this.wordSpacing = 0;
     this.textHScale = 1;
     this.textRenderingMode = TextRenderingMode.FILL;
     this.textRise = 0;
-    // Default fore and background colors
-    this.fillColor = '#000000';
+
+    // Default foreground and background colors
+    this.fillColor = SVG_DEFAULTS.fillColor;
     this.strokeColor = '#000000';
 
     this.fillAlpha = 1;
@@ -260,7 +257,6 @@ var SVGExtraState = (function SVGExtraStateClosure() {
     this.dashArray = [];
     this.dashPhase = 0;
 
-    // Dependency
     this.dependencies = [];
 
     // Clipping
@@ -282,13 +278,20 @@ var SVGExtraState = (function SVGExtraStateClosure() {
   return SVGExtraState;
 })();
 
-var SVGGraphics = (function SVGGraphicsClosure(ctx) {
+var SVGGraphics = (function SVGGraphicsClosure() {
+  function createScratchSVG(width, height) {
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg:svg');
+    svg.setAttributeNS(null, 'version', '1.1');
+    svg.setAttributeNS(null, 'width', width + 'px');
+    svg.setAttributeNS(null, 'height', height + 'px');
+    svg.setAttributeNS(null, 'viewBox', '0 0 ' + width + ' ' + height);
+    return svg;
+  }
+
   function opListToTree(opList) {
     var opTree = [];
-    var saveIdx = [];
-    var restIdx = [];
     var tmp = [];
-    var items = [];
     var opListLen = opList.length;
 
     for (var x = 0; x < opListLen; x++) {
@@ -358,7 +361,6 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
   }
 
   function SVGGraphics(commonObjs, objs) {
-
     this.current = new SVGExtraState();
     this.transformMatrix = IDENTITY_MATRIX; // Graphics state matrix
     this.transformStack = [];
@@ -366,6 +368,10 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
     this.commonObjs = commonObjs;
     this.objs = objs;
     this.pendingEOFill = false;
+
+    this.embedFonts = false;
+    this.embeddedFonts = {};
+    this.cssStyle = null;
   }
 
   var NS = 'http://www.w3.org/2000/svg';
@@ -373,8 +379,6 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
   var XLINK_NS = 'http://www.w3.org/1999/xlink';
   var LINE_CAP_STYLES = ['butt', 'round', 'square'];
   var LINE_JOIN_STYLES = ['miter', 'round', 'bevel'];
-  var NORMAL_CLIP = {};
-  var EO_CLIP = {};
   var clipCount = 0;
   var maskCount = 0;
 
@@ -433,51 +437,48 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
     transform: function SVGGraphics_transform(a, b, c, d, e, f) {
       var transformMatrix = [a, b, c, d, e, f];
       this.transformMatrix = PDFJS.Util.transform(this.transformMatrix,
-        transformMatrix);
+                                                  transformMatrix);
 
       this.tgrp = document.createElementNS(NS, 'svg:g');
       this.tgrp.setAttributeNS(null, 'transform', pm(this.transformMatrix));
     },
 
-    beginDrawing: function SVGGraphics_beginDrawing(viewport, pageNum,
-                                               container, operatorList) {
+    getSVG: function SVGGraphics_getSVG(operatorList, viewport) {
       this.svg = createScratchSVG(viewport.width, viewport.height);
-      this.container = container;
       this.viewport = viewport;
-      this.transformMatrix = IDENTITY_MATRIX;
-      this.pgrp = document.createElementNS(NS, 'svg:g'); // Parent group
-      this.pgrp.setAttributeNS(null, 'transform', pm(viewport.transform));
-      this.tgrp = document.createElementNS(NS, 'svg:g'); // Transform group
-      this.tgrp.setAttributeNS(null, 'transform', pm(this.transformMatrix));
-      this.defs = document.createElementNS(NS, 'svg:defs');
-      this.pgrp.appendChild(this.defs);
-      this.pgrp.appendChild(this.tgrp);
-      this.svg.appendChild(this.pgrp);
-      this.container.appendChild(this.svg);
-      var opTree = this.convertOpList(operatorList);
-      this.executeOpTree(opTree);
+
+      return this.loadDependencies(operatorList).then(function () {
+        this.transformMatrix = IDENTITY_MATRIX;
+        this.pgrp = document.createElementNS(NS, 'svg:g'); // Parent group
+        this.pgrp.setAttributeNS(null, 'transform', pm(viewport.transform));
+        this.tgrp = document.createElementNS(NS, 'svg:g'); // Transform group
+        this.tgrp.setAttributeNS(null, 'transform', pm(this.transformMatrix));
+        this.defs = document.createElementNS(NS, 'svg:defs');
+        this.pgrp.appendChild(this.defs);
+        this.pgrp.appendChild(this.tgrp);
+        this.svg.appendChild(this.pgrp);
+        var opTree = this.convertOpList(operatorList);
+        this.executeOpTree(opTree);
+        return this.svg;
+      }.bind(this));
     },
 
     convertOpList: function SVGGraphics_convertOpList(operatorList) {
       var argsArray = operatorList.argsArray;
       var fnArray = operatorList.fnArray;
       var fnArrayLen  = fnArray.length;
-      var argsArrayLen = argsArray.length;
-      var opTree = [];
-
       var REVOPS = [];
+      var opList = [];
 
       for (var op in OPS) {
         REVOPS[OPS[op]] = op;
       }
 
-      var opList = [];
       for (var x = 0; x < fnArrayLen; x++) {
         var fnId = fnArray[x];
         opList.push({'fnId' : fnId, 'fn': REVOPS[fnId], 'args': argsArray[x]});
       }
-      opTree = opListToTree(opList);
-      return opTree;
+      return opListToTree(opList);
     },
     
     executeOpTree: function SVGGraphics_executeOpTree(opTree) {
@@ -489,7 +490,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
 
         switch (fnId | 0) {
           case OPS.beginText:
-            this.beginText(args);
+            this.beginText();
             break;
           case OPS.setLeading:
             this.setLeading(args);
@@ -520,7 +521,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
             break;
           case OPS.setTextMatrix:
             this.setTextMatrix(args[0], args[1], args[2],
-                              args[3], args[4], args[5]);
+                               args[3], args[4], args[5]);
             break;
           case OPS.setLineWidth:
             this.setLineWidth(args[0]);
@@ -596,7 +597,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
             break;
           case OPS.transform:
             this.transform(args[0], args[1], args[2], args[3],
-                          args[4], args[5]);
+                           args[4], args[5]);
             break;
           case OPS.constructPath:
             this.constructPath(args[0], args[1]);
@@ -608,7 +609,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
             this.group(opTree[x].items);
             break;
           default:
-            warn('Unimplemented Method '+ fn);
+            warn('Unimplemented method '+ fn);
             break;
         }
       }
@@ -628,8 +629,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
 
     setTextMatrix: function SVGGraphics_setTextMatrix(a, b, c, d, e, f) {
       var current = this.current;
-      this.current.textMatrix = [a, b, c, d, e, f];
-      this.current.lineMatrix = [a, b, c, d, e, f];
+      this.current.textMatrix = this.current.lineMatrix = [a, b, c, d, e, f];
 
       this.current.x = this.current.lineX = 0;
       this.current.y = this.current.lineY = 0;
@@ -645,7 +645,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.txtElement.appendChild(current.tspan);
     },
 
-    beginText: function SVGGraphics_beginText(args) {
+    beginText: function SVGGraphics_beginText() {
       this.current.x = this.current.lineX = 0;
       this.current.y = this.current.lineY = 0;
       this.current.textMatrix = IDENTITY_MATRIX;
@@ -678,14 +678,12 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
         return;
       }
 
-      var fontSizeScale = current.fontSizeScale;
       var charSpacing = current.charSpacing;
       var wordSpacing = current.wordSpacing;
       var fontDirection = current.fontDirection;
       var textHScale = current.textHScale * fontDirection;
       var glyphsLength = glyphs.length;
       var vertical = font.vertical;
-      var defaultVMetrics = font.defaultVMetrics;
       var widthAdvanceScale = fontSize * current.fontMatrix[0];
 
       var x = 0, i;
@@ -720,10 +718,15 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.tspan.setAttributeNS(null, 'font-family', current.fontFamily);
       current.tspan.setAttributeNS(null, 'font-size',
                                    pf(current.fontSize) + 'px');
-      current.tspan.setAttributeNS(null, 'font-style', current.fontStyle);
-      current.tspan.setAttributeNS(null, 'font-weight', current.fontWeight);
-      current.tspan.setAttributeNS(null, 'stroke', 'none');
-      current.tspan.setAttributeNS(null, 'fill', current.fillColor);
+      if (current.fontStyle !== SVG_DEFAULTS.fontStyle) {
+        current.tspan.setAttributeNS(null, 'font-style', current.fontStyle);
+      }
+      if (current.fontWeight !== SVG_DEFAULTS.fontWeight) {
+        current.tspan.setAttributeNS(null, 'font-weight', current.fontWeight);
+      }
+      if (current.fillColor !== SVG_DEFAULTS.fillColor) {
+        current.tspan.setAttributeNS(null, 'fill', current.fillColor);
+      }
 
       current.txtElement.setAttributeNS(null, 'transform',
                                         pm(current.textMatrix) +
@@ -741,20 +744,37 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       this.moveText(x, y);
     },
 
+    addFontStyle: function SVGGraphics_addFontStyle(fontObj) {
+      if (!this.cssStyle) {
+        this.cssStyle = document.createElementNS(NS, 'svg:style');
+        this.cssStyle.setAttributeNS(null, 'type', 'text/css');
+        this.defs.appendChild(this.cssStyle);
+      }
+
+      var url = PDFJS.createObjectURL(fontObj.data, fontObj.mimetype);
+      this.cssStyle.textContent +=
+        '@font-face { font-family: "' + fontObj.loadedName + '";' +
+        ' src: url(' + url + '); }\n';
+    },
+
     setFont: function SVGGraphics_setFont(details) {
       var current = this.current;
       var fontObj = this.commonObjs.get(details[0]);
       var size = details[1];
       this.current.font = fontObj;
 
+      if (this.embedFonts && fontObj.data &&
+          !this.embeddedFonts[fontObj.loadedName]) {
+        this.addFontStyle(fontObj);
+        this.embeddedFonts[fontObj.loadedName] = fontObj;
+      }
+
       current.fontMatrix = (fontObj.fontMatrix ?
-                           fontObj.fontMatrix : FONT_IDENTITY_MATRIX);
+                            fontObj.fontMatrix : FONT_IDENTITY_MATRIX);
 
       var bold = fontObj.black ? (fontObj.bold ? 'bolder' : 'bold') :
                                  (fontObj.bold ? 'bold' : 'normal');
-
       var italic = fontObj.italic ? 'italic' : 'normal';
-
 
       if (size < 0) {
         size = -size;
@@ -772,7 +792,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.xcoords = [];
     },
 
-    endText: function SVGGraphics_endText(args) {
+    endText: function SVGGraphics_endText() {
       if (this.current.pendingClip) {
         this.pgrp.appendChild(this.cgrp);
       } else {
@@ -815,7 +835,6 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       var x = current.x, y = current.y;
       current.path = document.createElementNS(NS, 'svg:path');
       var d = [];
-      var arr = [];
       var opLength = ops.length;
 
       for (var i = 0, j = 0; i < opLength; i++) {
@@ -925,7 +944,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.pendingClip = true;
       this.cgrp = document.createElementNS(NS, 'svg:g');
       this.cgrp.setAttributeNS(null, 'clip-path',
-       'url(#' + current.clipId + ')');
+                               'url(#' + current.clipId + ')');
       this.pgrp.appendChild(this.cgrp);
     },
 
@@ -1044,7 +1063,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       var current = this.current;
       var imgObj = this.objs.get(objId);
       var imgEl = document.createElementNS(NS, 'svg:image');
-      imgEl.setAttributeNS(XLINK_NS, 'href', imgObj.src);
+      imgEl.setAttributeNS(XLINK_NS, 'xlink:href', imgObj.src);
       imgEl.setAttributeNS(null, 'width', imgObj.width + 'px');
       imgEl.setAttributeNS(null, 'height', imgObj.height + 'px');
       imgEl.setAttributeNS(null, 'x', '0');
@@ -1067,7 +1086,6 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
         warn('Dependent image isn\'t ready yet');
         return;
       }
-
       this.paintInlineImageXObject(imgData);
     },
 
@@ -1086,7 +1104,7 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
       current.element = cliprect;
       this.clip('nonzero');
       var imgEl = document.createElementNS(NS, 'svg:image');
-      imgEl.setAttributeNS(XLINK_NS, 'href', imgSrc);
+      imgEl.setAttributeNS(XLINK_NS, 'xlink:href', imgSrc);
       imgEl.setAttributeNS(null, 'x', '0');
       imgEl.setAttributeNS(null, 'y', pf(-height));
       imgEl.setAttributeNS(null, 'width', pf(width) + 'px');
@@ -1110,11 +1128,8 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
     paintImageMaskXObject:
         function SVGGraphics_paintImageMaskXObject(imgData) {
       var current = this.current;
-
       var width = imgData.width;
       var height = imgData.height;
-
-      var img = convertImgDataToPng(imgData);
       var fillColor = current.fillColor;
 
       current.maskId = 'mask' + maskCount++;
@@ -1136,3 +1151,6 @@ var SVGGraphics = (function SVGGraphicsClosure(ctx) {
   };
   return SVGGraphics;
 })();
+
+PDFJS.SVGGraphics = SVGGraphics;
+//#endif
